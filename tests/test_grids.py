@@ -1,3 +1,6 @@
+# Copyright (C) 2026 Tanguy Marsault - PhySense
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 import pytest
 import numpy as np
 from physense_utils.grids import Grid1D, Grid2D

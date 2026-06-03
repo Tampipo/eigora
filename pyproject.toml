@@ -6,6 +6,9 @@ build-backend = "hatchling.build"
 name = "physense-utils"
 version = "0.1.0"
 description = "Shared utilities for the Physense simulation platform"
+license = "AGPL-3.0-or-later"
+license-files = ["LICENSE"]
+authors = [{ name = "Tanguy Marsault" }]
 requires-python = ">=3.12"
 dependencies = [
     "numpy>=2.0",
