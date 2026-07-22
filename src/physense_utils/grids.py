@@ -134,6 +134,25 @@ class Grid3D:
     def dz(self) -> float:
         return (self.z_max - self.z_min) / (self.nz - 1)
 
+    def to_spherical(self) -> tuple[NDArray[np.float64], NDArray[np.float64], NDArray[np.float64]]:
+        """
+        Convert the 3D Cartesian grid to spherical coordinates (r, theta, phi).
+
+        Returns
+        -------
+        r : array
+            Radial distances.
+        theta : array
+            Polar angles (0 <= theta <= pi).
+        phi : array
+            Azimuthal angles (0 <= phi < 2*pi).
+        """
+        X, Y, Z = self.meshgrid
+        r = np.sqrt(X**2 + Y**2 + Z**2)
+        theta = np.arccos(np.clip(Z / r, -1.0, 1.0))  # Avoid division by zero
+        phi = np.arctan2(Y, X) % (2 * np.pi)
+        return r, theta, phi
+
 __all__ = ["Grid1D", "Grid2D", "Grid3D"]
 
 
