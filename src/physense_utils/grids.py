@@ -78,4 +78,63 @@ class Grid2D:
     def dy(self) -> float:
         return (self.y_max - self.y_min) / (self.ny - 1)
 
-__all__ = ["Grid1D", "Grid2D"]
+@dataclass(frozen=True)
+class Grid3D:
+    """Uniform 3D grid on [x_min, x_max] x [y_min, y_max] x [z_min, z_max]."""
+
+    x_min: float
+    x_max: float
+    y_min: float
+    y_max: float
+    z_min: float
+    z_max: float
+    nx: int
+    ny: int
+    nz: int
+
+    def __post_init__(self) -> None:
+        if self.x_min >= self.x_max:
+            raise ValueError(f"x_min ({self.x_min}) must be less than x_max ({self.x_max})")
+        if self.y_min >= self.y_max:
+            raise ValueError(f"y_min ({self.y_min}) must be less than y_max ({self.y_max})")
+        if self.z_min >= self.z_max:
+            raise ValueError(f"z_min ({self.z_min}) must be less than z_max ({self.z_max})")
+        if self.nx < 2:
+            raise ValueError(f"nx ({self.nx}) must be at least 2")
+        if self.ny < 2:
+            raise ValueError(f"ny ({self.ny}) must be at least 2")
+        if self.nz < 2:
+            raise ValueError(f"nz ({self.nz}) must be at least 2")
+
+    @property
+    def x(self) -> NDArray[np.float64]:
+        return np.linspace(self.x_min, self.x_max, self.nx)
+
+    @property
+    def y(self) -> NDArray[np.float64]:
+        return np.linspace(self.y_min, self.y_max, self.ny)
+
+    @property
+    def z(self) -> NDArray[np.float64]:
+        return np.linspace(self.z_min, self.z_max, self.nz)
+
+    @property
+    def meshgrid(self) -> tuple[NDArray[np.float64], NDArray[np.float64], NDArray[np.float64]]:
+        return np.meshgrid(self.x, self.y, self.z, indexing="ij")
+
+    @property
+    def dx(self) -> float:
+        return (self.x_max - self.x_min) / (self.nx - 1)
+
+    @property
+    def dy(self) -> float:
+        return (self.y_max - self.y_min) / (self.ny - 1)
+
+    @property
+    def dz(self) -> float:
+        return (self.z_max - self.z_min) / (self.nz - 1)
+
+__all__ = ["Grid1D", "Grid2D", "Grid3D"]
+
+
+

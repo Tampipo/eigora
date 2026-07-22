@@ -10,6 +10,7 @@ from physense_utils.fft import fft1d, ifft1d, fft_frequencies
 __all__ = [
     "Grid1D",
     "Grid2D",
+    "Grid3D",
     "fft1d",
     "ifft1d",
     "fft_frequencies",
@@ -17,4 +18,5 @@ __all__ = [
     "sinc",
     "heaviside",
     "constants",
+    "spherical_harmonic",
 ]
