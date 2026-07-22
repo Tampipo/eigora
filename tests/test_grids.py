@@ -112,3 +112,36 @@ class TestGrid3D:
         assert r[1, 1, 1] == pytest.approx(0.0)  # Center point
         assert theta[2, 1, 1] == pytest.approx(np.pi / 2)  # Point on xy-plane
         assert phi[1, 2, 1] == pytest.approx(np.pi / 2)  # Point on y-axis
+
+    def test_to_cartesian(self):
+        g = Grid3D(x_min=-1.0, x_max=1.0, y_min=-1.0, y_max=1.0, z_min=-1.0, z_max=1.0,
+                   nx=3, ny=3, nz=3)
+        r, theta, phi = g.to_spherical()
+        x, y, z = g.to_cartesian(r, theta, phi)
+
+        # Check shapes
+        assert x.shape == (3, 3, 3)
+        assert y.shape == (3, 3, 3)
+        assert z.shape == (3, 3, 3)
+
+        # Check known values
+        assert x[1, 1, 1] == pytest.approx(0.0)  # Center point
+        assert x[2, 1, 1] == pytest.approx(1.0)  # Point on xy-plane
+        assert z[1, 2, 1] == pytest.approx(0.0)  # Point on y-axis
+
+    def test_to_grid(self):
+        g = Grid3D(x_min=-1.0, x_max=1.0, y_min=-1.0, y_max=1.0, z_min=-1.0, z_max=1.0,
+                   nx=5, ny=5, nz=5)
+        r, theta, phi = g.to_spherical()
+
+        # Define a simple function in spherical coordinates
+        def f(r, theta, phi):
+            return r * np.sin(theta) * np.cos(phi)
+
+        grid_values = g.to_grid(r.flatten(), theta.flatten(), phi.flatten(), f)
+
+        # Check shape of the resulting grid
+        assert grid_values.shape == (5, 5, 5)
+
+        # Check some known values
+        assert grid_values[2, 2, 2] == pytest.approx(0.0)  # Center point

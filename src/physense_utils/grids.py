@@ -149,9 +149,71 @@ class Grid3D:
         """
         X, Y, Z = self.meshgrid
         r = np.sqrt(X**2 + Y**2 + Z**2)
-        theta = np.arccos(np.clip(Z / r, -1.0, 1.0))  # Avoid division by zero
+        theta = np.zeros_like(r)
+        nonzero = r > 0
+        theta[nonzero] = np.arccos(np.clip(Z[nonzero] / r[nonzero], -1.0, 1.0))  # theta undefined at r=0, default to 0
         phi = np.arctan2(Y, X) % (2 * np.pi)
         return r, theta, phi
+
+    @staticmethod
+    def to_cartesian(r: np.ndarray, theta: np.ndarray, phi: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Convert spherical coordinates (r, theta, phi) to Cartesian coordinates (x, y, z).
+
+        Parameters
+        ----------
+        r : np.ndarray
+            Radial distances from the nucleus.
+        theta : np.ndarray
+            Polar angles in radians.
+        phi : np.ndarray
+            Azimuthal angles in radians.
+
+        Returns
+        -------
+        tuple[np.ndarray, np.ndarray, np.ndarray]
+            Cartesian coordinates (x, y, z).
+        """
+        x = r * np.sin(theta) * np.cos(phi)
+        y = r * np.sin(theta) * np.sin(phi)
+        z = r * np.cos(theta)
+        return x, y, z
+
+    
+    def to_grid(self,r: np.ndarray, theta: np.ndarray, phi: np.ndarray, f: callable) -> np.ndarray:
+        """
+        Convert a function defined in spherical coordinates to a 3D grid.
+
+        Parameters
+        ----------
+        r : np.ndarray
+            Radial distances from the nucleus.
+        theta : np.ndarray
+            Polar angles in radians.
+        phi : np.ndarray
+            Azimuthal angles in radians.
+        f : callable
+            Function defined in spherical coordinates (r, theta, phi).
+        grid : Grid3D
+            3D grid to which the function will be mapped.
+        """
+        x, y, z = self.to_cartesian(r, theta, phi)
+        values = f(r, theta, phi)
+
+        # Create an empty grid
+        grid_values = np.zeros((self.nx, self.ny, self.nz), dtype=values.dtype)
+
+        # Map the spherical coordinates to the grid indices
+        for i in range(len(r)):
+            xi = int((x[i] - self.x_min) / (self.x_max - self.x_min) * (self.nx - 1))
+            yi = int((y[i] - self.y_min) / (self.y_max - self.y_min) * (self.ny - 1))
+            zi = int((z[i] - self.z_min) / (self.z_max - self.z_min) * (self.nz - 1))
+
+            if 0 <= xi < self.nx and 0 <= yi < self.ny and 0 <= zi < self.nz:
+                grid_values[xi, yi, zi] = values[i]
+
+        return grid_values
+
 
 __all__ = ["Grid1D", "Grid2D", "Grid3D"]
 
