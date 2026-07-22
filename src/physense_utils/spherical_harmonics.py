@@ -33,7 +33,7 @@ def spherical_harmonic(l: int, m: int, theta: float, phi: float) -> complex:
     if abs(m) > l:
         raise ValueError(f"Order m must satisfy -l <= m <= l, got m={m}, l={l}")
     
-    return sph_harm_y(l, m, theta, phi) 
+    return sph_harm_y(l, m, theta, phi) # Physicists convention
 
 
 __all__ = ["spherical_harmonic"]
