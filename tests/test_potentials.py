@@ -83,6 +83,36 @@ class TestRectangularBarrier:
         with pytest.raises(ValueError):
             RectangularBarrier(height=0.0)
 
+    def test_transmission_plus_reflection_is_one(self):
+        barrier = RectangularBarrier(height=5.0, width=1.0)
+        for E in [0.5, 1.0, 2.0, 3.2, 5.0, 6.0, 9.0]:
+            T = barrier.transmission_coefficient(E)
+            R = barrier.reflection_coefficient(E)
+            assert T + R == pytest.approx(1.0)
+
+    def test_transmission_increases_with_energy(self):
+        barrier = RectangularBarrier(height=5.0, width=1.0)
+        Ts = [barrier.transmission_coefficient(E) for E in [0.5, 2.0, 4.0, 6.0, 9.0]]
+        assert all(a < b for a, b in zip(Ts, Ts[1:]))
+
+    def test_transmission_continuous_at_barrier_height(self):
+        barrier = RectangularBarrier(height=5.0, width=1.0)
+        below = barrier.transmission_coefficient(4.9999)
+        at = barrier.transmission_coefficient(5.0)
+        above = barrier.transmission_coefficient(5.0001)
+        assert below == pytest.approx(at, abs=1e-4)
+        assert above == pytest.approx(at, abs=1e-4)
+
+    def test_transmission_matches_thin_barrier_reference(self):
+        # Reference value from the exact formula T = [1 + sinh^2(sqrt(sigma(1-eps))) / (4 eps(1-eps))]^-1
+        barrier = RectangularBarrier(height=5.0, width=1.0)
+        assert barrier.transmission_coefficient(3.2) == pytest.approx(0.079835, abs=1e-5)
+
+    def test_invalid_energy(self):
+        barrier = RectangularBarrier(height=5.0, width=1.0)
+        with pytest.raises(ValueError):
+            barrier.transmission_coefficient(0.0)
+
 
 class TestPotentialStep:
     def test_zero_before(self):

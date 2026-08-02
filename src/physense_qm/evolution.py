@@ -106,13 +106,17 @@ def evolve(
     psi = initial_state.normalised(grid)
 
     n_steps = int(t_max / dt)
-    save_every = max(1, n_steps // (n_frames - 1))
+    # Evenly-spaced target steps, deduplicated (only relevant if n_frames
+    # exceeds n_steps+1) -- guarantees exactly n_frames frames, always
+    # including the first and last step, unlike a fixed save-every stride
+    # which can silently overshoot n_frames when n_steps isn't a multiple of it.
+    save_steps = set(np.linspace(0, n_steps, n_frames).round().astype(int).tolist())
 
     saved_psi = []
     saved_times = []
 
     for step in range(n_steps + 1):
-        if step % save_every == 0 or step == n_steps:
+        if step in save_steps:
             saved_psi.append(psi.copy())
             saved_times.append(step * dt)
 
