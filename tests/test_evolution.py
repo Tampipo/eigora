@@ -59,7 +59,20 @@ class TestEvolution:
             dt=0.01,
             n_frames=20,
         )
-        assert evo.n_frames <= 21
+        assert evo.n_frames == 20
+
+    def test_n_frames_exact_with_awkward_step_count(self, grid, wavepacket):
+        # t_max/dt doesn't divide evenly by n_frames-1 -- this used to
+        # overcount (a fixed save-every stride plus a forced final frame).
+        evo = evolve(
+            grid=grid,
+            potential=FreeParticle(),
+            initial_state=wavepacket,
+            t_max=9.0,
+            dt=0.005,
+            n_frames=110,
+        )
+        assert evo.n_frames == 110
 
     def test_wavepacket_moves(self, grid, wavepacket):
         """With k0 > 0, the wavepacket should move to the right."""

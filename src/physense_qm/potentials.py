@@ -122,6 +122,36 @@ class RectangularBarrier(Potential):
         V[inside] = self.height
         return V
 
+    def transmission_coefficient(self, E: float) -> float:
+        """
+        Exact transmission coefficient (not the WKB/deep-tunnelling
+        approximation) for a particle of energy E scattering off the barrier.
+
+        With epsilon = E / height and sigma = 2 * height * width**2
+        (atomic units, hbar = m = 1):
+
+            epsilon < 1 (tunnelling):   T = [1 + sinh^2(sqrt(sigma(1-eps))) / (4 eps(1-eps))]^-1
+            epsilon > 1 (over-barrier): T = [1 + sin^2(sqrt(sigma(eps-1)))  / (4 eps(eps-1))]^-1
+            epsilon == 1:               T = [1 + sigma / 4]^-1   (limiting case)
+        """
+        if E <= 0:
+            raise ValueError(f"E must be positive, got {E}")
+
+        epsilon = E / self.height
+        sigma = 2 * self.height * self.width**2
+
+        if np.isclose(epsilon, 1.0):
+            return 1 / (1 + sigma / 4)
+        if epsilon < 1:
+            arg = np.sqrt(sigma * (1 - epsilon))
+            return 1 / (1 + np.sinh(arg) ** 2 / (4 * epsilon * (1 - epsilon)))
+        arg = np.sqrt(sigma * (epsilon - 1))
+        return 1 / (1 + np.sin(arg) ** 2 / (4 * epsilon * (epsilon - 1)))
+
+    def reflection_coefficient(self, E: float) -> float:
+        """Reflection coefficient = 1 - transmission_coefficient(E)."""
+        return 1 - self.transmission_coefficient(E)
+
 
 class PotentialStep(Potential):
     """

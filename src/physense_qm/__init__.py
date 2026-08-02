@@ -15,6 +15,7 @@ from physense_qm.potentials import (
 from physense_qm.eigensolver import EigenSolution, solve_eigenstates
 from physense_qm.wavepacket import GaussianWavepacket
 from physense_qm.evolution import Evolution, evolve
+from physense_qm.scattering import momentum_density, energy_averaged_transmission
 from physense_qm import observables
 
 __all__ = [
@@ -33,5 +34,7 @@ __all__ = [
     "SingleAtomState",
     "Evolution",
     "evolve",
+    "momentum_density",
+    "energy_averaged_transmission",
     "observables",
 ]
