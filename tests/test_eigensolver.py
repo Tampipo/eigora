@@ -5,7 +5,7 @@ import pytest
 import numpy as np
 from physense_utils.grids import GridND
 from physense_qm.potentials import HarmonicWell, InfiniteSquareWell
-from physense_qm.eigensolver import solve_eigenstates
+from physense_qm.solvers.eigensolver import solve_eigenstates
 
 
 @pytest.fixture

@@ -10,7 +10,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from physense_qm.potentials import RectangularBarrier
-from physense_qm.wavepacket import GaussianWavepacket
+from physense_qm.states.wavepacket import GaussianWavepacket
 
 
 def momentum_density(
