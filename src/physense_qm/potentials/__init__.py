@@ -5,8 +5,11 @@
 Quantum potentials.
 
 `known` holds the catalogue of analytic 1D potentials (harmonic well, barrier,
-double well, ...). Everything is re-exported here, so
-`from physense_qm.potentials import HarmonicWell` keeps working.
+double well, ...). `base`, `generic` and `separable` generalise to any
+dimension: wrap an arbitrary callable with `GenericPotential`, or -- when the
+system splits into independent sub-systems -- combine known pieces with
+`SeparablePotential`, which keeps the structure that `physense_qm.spectra`
+needs to solve it.
 """
 
 from physense_qm.potentials.known import (
@@ -20,6 +23,9 @@ from physense_qm.potentials.known import (
     PotentialStep,
     DoubleWell,
 )
+from physense_qm.potentials.base import PotentialND, SumPotential
+from physense_qm.potentials.generic import GenericPotential
+from physense_qm.potentials.separable import Block1D, SeparablePotential, as_block
 
 __all__ = [
     "Potential",
@@ -31,4 +37,10 @@ __all__ = [
     "RectangularBarrier",
     "PotentialStep",
     "DoubleWell",
+    "PotentialND",
+    "SumPotential",
+    "GenericPotential",
+    "Block1D",
+    "SeparablePotential",
+    "as_block",
 ]
