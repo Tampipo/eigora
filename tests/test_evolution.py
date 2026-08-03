@@ -3,7 +3,7 @@
 
 import pytest
 import numpy as np
-from physense_utils.grids import Grid1D
+from physense_utils.grids import GridND
 from physense_qm.potentials import FreeParticle, RectangularBarrier
 from physense_qm.wavepacket import GaussianWavepacket
 from physense_qm.evolution import evolve
@@ -12,7 +12,7 @@ from physense_qm import observables
 
 @pytest.fixture
 def grid():
-    return Grid1D(x_min=-20.0, x_max=20.0, n_points=512)
+    return GridND.line(-20.0, 20.0, 512)
 
 
 @pytest.fixture

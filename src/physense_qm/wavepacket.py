@@ -12,7 +12,7 @@ from dataclasses import dataclass
 import numpy as np
 from numpy.typing import NDArray
 
-from physense_utils.grids import Grid1D
+from physense_utils.grids import GridND
 
 
 class InitialState(ABC):
@@ -22,7 +22,7 @@ class InitialState(ABC):
     def __call__(self, x: NDArray[np.float64]) -> NDArray[np.complex128]:
         """Return the complex wavefunction psi(x) on the grid."""
 
-    def normalised(self, grid: Grid1D) -> NDArray[np.complex128]:
+    def normalised(self, grid: GridND) -> NDArray[np.complex128]:
         """Return psi(x) normalised so that integral |psi|^2 dx = 1."""
         psi = self(grid.x)
         norm = np.sqrt(np.trapezoid(np.abs(psi) ** 2, grid.x))

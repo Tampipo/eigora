@@ -5,7 +5,7 @@
 High-level interface for 1D quantum mechanics simulations.
 """
 
-from physense_utils.grids import Grid1D
+from physense_utils.grids import GridND
 
 from physense_qm.potentials import Potential
 from physense_qm.eigensolver import EigenSolution, solve_eigenstates
@@ -19,12 +19,12 @@ class QuantumSystem1D:
 
     Example
     -------
-    >>> from physense_utils.grids import Grid1D
+    >>> from physense_utils.grids import GridND
     >>> from physense_qm import QuantumSystem1D
     >>> from physense_qm.potentials import HarmonicWell
     >>> from physense_qm.wavepacket import GaussianWavepacket
     >>>
-    >>> grid = Grid1D(x_min=-10.0, x_max=10.0, n_points=512)
+    >>> grid = GridND.line(-10.0, 10.0, 512)
     >>> system = QuantumSystem1D(grid=grid, potential=HarmonicWell(omega=1.0))
     >>>
     >>> solution = system.solve(n_states=5)
@@ -34,7 +34,7 @@ class QuantumSystem1D:
     >>> evolution = system.evolve(state, t_max=10.0, dt=0.01)
     """
 
-    def __init__(self, grid: Grid1D, potential: Potential) -> None:
+    def __init__(self, grid: GridND, potential: Potential) -> None:
         self.grid = grid
         self.potential = potential
 
