@@ -13,7 +13,7 @@ import scipy.sparse as sp
 import scipy.sparse.linalg as spla
 from numpy.typing import NDArray
 
-from physense_utils.grids import Grid1D
+from physense_utils.grids import GridND
 
 from physense_qm.potentials import Potential
 
@@ -29,7 +29,7 @@ class EigenSolution:
         Eigenvalues in ascending order (atomic units).
     wavefunctions : NDArray of shape (n_states, n_points)
         Normalised eigenfunctions. wavefunctions[i] corresponds to energies[i].
-    grid : Grid1D
+    grid : GridND
         The spatial grid used for the calculation.
     potential : NDArray of shape (n_points,)
         The potential evaluated on the grid.
@@ -37,7 +37,7 @@ class EigenSolution:
 
     energies: NDArray[np.float64]
     wavefunctions: NDArray[np.float64]
-    grid: Grid1D
+    grid: GridND
     potential: NDArray[np.float64]
 
     @property
@@ -64,7 +64,7 @@ class EigenSolution:
 
 
 def solve_eigenstates(
-    grid: Grid1D,
+    grid: GridND,
     potential: Potential,
     n_states: int = 10,
 ) -> EigenSolution:
@@ -77,7 +77,7 @@ def solve_eigenstates(
 
     Parameters
     ----------
-    grid : Grid1D
+    grid : GridND
         Spatial grid.
     potential : Potential
         Potential function V(x).

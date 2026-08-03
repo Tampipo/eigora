@@ -16,7 +16,7 @@ from dataclasses import dataclass
 import numpy as np
 from numpy.typing import NDArray
 
-from physense_utils.grids import Grid1D
+from physense_utils.grids import GridND
 from physense_utils.fft import fft_frequencies
 
 from physense_qm.potentials import Potential
@@ -34,7 +34,7 @@ class Evolution:
         Wavefunction at each saved time step.
     times : NDArray of shape (n_frames,)
         Time values corresponding to each frame.
-    grid : Grid1D
+    grid : GridND
         Spatial grid.
     potential : NDArray of shape (n_points,)
         The potential evaluated on the grid.
@@ -42,7 +42,7 @@ class Evolution:
 
     psi: NDArray[np.complex128]
     times: NDArray[np.float64]
-    grid: Grid1D
+    grid: GridND
     potential: NDArray[np.float64]
 
     @property
@@ -59,7 +59,7 @@ class Evolution:
 
 
 def evolve(
-    grid: Grid1D,
+    grid: GridND,
     potential: Potential,
     initial_state: InitialState,
     t_max: float,
@@ -71,7 +71,7 @@ def evolve(
 
     Parameters
     ----------
-    grid : Grid1D
+    grid : GridND
         Spatial grid.
     potential : Potential
         Potential V(x).

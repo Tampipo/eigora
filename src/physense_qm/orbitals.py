@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import numpy as np
 from scipy.special import eval_genlaguerre
 from physense_utils.spherical_harmonics import spherical_harmonic
-from physense_utils.grids import Grid3D
+from physense_utils.grids import GridND, to_spherical, map_spherical
 """
 Atomic orbitals for hydrogen-like atoms, expressed in spherical coordinates (r, theta, phi).
 """
@@ -19,7 +19,7 @@ class SingleAtomState:
     Example
     -------
     >>> from physense_qm import SingleAtomState
-    >>> atom = SingleAtomState(grid=Grid3D(), Z=1, n=1, l=0, m=0)  # Hydrogen atom
+    >>> atom = SingleAtomState(Z=1, n=1, l=0, m=0)  # Hydrogen atom
     >>> r = 1.0
     >>> theta = 0.5
     >>> phi = 1.0
@@ -138,22 +138,22 @@ class SingleAtomState:
         orbital_values = self._orbital(r, theta, phi)
         return np.abs(orbital_values)**2
 
-    def density_on_grid(self, grid: Grid3D) -> np.ndarray:
+    def density_on_grid(self, grid: GridND) -> np.ndarray:
         """
         Compute the probability density of the atomic orbital on a 3D grid.
 
         Parameters
         ----------
-        grid : Grid3D
-            A 3D grid object containing meshgrid arrays for x, y, z coordinates.
+        grid : GridND
+            A 3D Cartesian grid.
 
         Returns
         -------
         np.ndarray
             Probability density of the atomic orbital on the 3D grid.
         """
-        r, theta, phi = grid.to_spherical()
-        return grid.to_grid(r.flatten(), theta.flatten(), phi.flatten(), self.density)
+        r, theta, phi = to_spherical(grid)
+        return map_spherical(grid, r.flatten(), theta.flatten(), phi.flatten(), self.density)
 
     def wavefunction(self, r: np.ndarray, theta: np.ndarray, phi: np.ndarray) -> np.ndarray:
         """
@@ -178,22 +178,22 @@ class SingleAtomState:
         """
         return self._orbital(r, theta, phi).real
 
-    def wavefunction_on_grid(self, grid: Grid3D) -> np.ndarray:
+    def wavefunction_on_grid(self, grid: GridND) -> np.ndarray:
         """
         Compute the real part of the atomic orbital wavefunction on a 3D grid.
 
         Parameters
         ----------
-        grid : Grid3D
-            A 3D grid object containing meshgrid arrays for x, y, z coordinates.
+        grid : GridND
+            A 3D Cartesian grid.
 
         Returns
         -------
         np.ndarray
             Real part of the atomic orbital wavefunction on the 3D grid.
         """
-        r, theta, phi = grid.to_spherical()
-        return grid.to_grid(r.flatten(), theta.flatten(), phi.flatten(), self.wavefunction)
+        r, theta, phi = to_spherical(grid)
+        return map_spherical(grid, r.flatten(), theta.flatten(), phi.flatten(), self.wavefunction)
 
 
 __all__ = ["SingleAtomState"]
