@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 
 from physense_qm.potentials import RectangularBarrier
-from physense_qm.wavepacket import GaussianWavepacket
+from physense_qm.states.wavepacket import GaussianWavepacket
 from physense_qm.scattering import momentum_density, energy_averaged_transmission
 
 

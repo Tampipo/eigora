@@ -8,9 +8,9 @@ High-level interface for 1D quantum mechanics simulations.
 from physense_utils.grids import GridND
 
 from physense_qm.potentials import Potential
-from physense_qm.eigensolver import EigenSolution, solve_eigenstates
-from physense_qm.wavepacket import InitialState
-from physense_qm.evolution import Evolution, evolve
+from physense_qm.solvers.eigensolver import EigenSolution, solve_eigenstates
+from physense_qm.states.wavepacket import InitialState
+from physense_qm.evolution.split_step import Evolution, evolve
 
 
 class QuantumSystem1D:
@@ -22,7 +22,7 @@ class QuantumSystem1D:
     >>> from physense_utils.grids import GridND
     >>> from physense_qm import QuantumSystem1D
     >>> from physense_qm.potentials import HarmonicWell
-    >>> from physense_qm.wavepacket import GaussianWavepacket
+    >>> from physense_qm.states.wavepacket import GaussianWavepacket
     >>>
     >>> grid = GridND.line(-10.0, 10.0, 512)
     >>> system = QuantumSystem1D(grid=grid, potential=HarmonicWell(omega=1.0))
