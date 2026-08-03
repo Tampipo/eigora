@@ -3,14 +3,14 @@
 
 import pytest
 import numpy as np
-from physense_utils.grids import Grid1D
+from physense_utils.grids import GridND
 from physense_qm.potentials import HarmonicWell, InfiniteSquareWell
 from physense_qm.eigensolver import solve_eigenstates
 
 
 @pytest.fixture
 def harmonic_solution():
-    grid = Grid1D(x_min=-10.0, x_max=10.0, n_points=512)
+    grid = GridND.line(-10.0, 10.0, 512)
     potential = HarmonicWell(omega=1.0)
     return solve_eigenstates(grid, potential, n_states=5)
 
@@ -55,11 +55,11 @@ class TestEigenSolverHarmonic:
 
 class TestEigenSolverValidation:
     def test_invalid_n_states(self):
-        grid = Grid1D(x_min=-5.0, x_max=5.0, n_points=100)
+        grid = GridND.line(-5.0, 5.0, 100)
         with pytest.raises(ValueError):
             solve_eigenstates(grid, HarmonicWell(), n_states=0)
 
     def test_n_states_too_large(self):
-        grid = Grid1D(x_min=-5.0, x_max=5.0, n_points=10)
+        grid = GridND.line(-5.0, 5.0, 10)
         with pytest.raises(ValueError):
             solve_eigenstates(grid, HarmonicWell(), n_states=10)

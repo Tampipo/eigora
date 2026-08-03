@@ -3,7 +3,7 @@
 
 import pytest
 import numpy as np
-from physense_utils.grids import Grid3D
+from physense_utils.grids import GridND
 from physense_qm.orbitals import SingleAtomState
 
 class TestSingleAtomState:
@@ -53,9 +53,9 @@ class TestSingleAtomState:
 
     def test_density_to_grid(self):
         state = SingleAtomState(Z=1, n=1, l=0, m=0)
-        grid = Grid3D(x_min=-5.0, x_max=5.0, y_min=-5.0, y_max=5.0, z_min=-5.0, z_max=5.0, nx=11, ny=11, nz=11)
+        grid = GridND.cube(half_width=5.0, n_points=11, ndim=3)
         density_grid = state.density_on_grid(grid)
-        assert density_grid.shape == (grid.nx, grid.ny, grid.nz)
+        assert density_grid.shape == grid.shape
         assert np.all(density_grid >= 0.0)
 
     def test_wavefunction(self):
@@ -74,9 +74,9 @@ class TestSingleAtomState:
         # positive on one side of the xy-plane and negative on the other —
         # this sign is exactly what the orbital-viewer isosurface colors by.
         state = SingleAtomState(Z=1, n=2, l=1, m=0)
-        grid = Grid3D(x_min=-10.0, x_max=10.0, y_min=-10.0, y_max=10.0, z_min=-10.0, z_max=10.0, nx=11, ny=11, nz=11)
+        grid = GridND.cube(half_width=10.0, n_points=11, ndim=3)
         psi_grid = state.wavefunction_on_grid(grid)
-        assert psi_grid.shape == (grid.nx, grid.ny, grid.nz)
+        assert psi_grid.shape == grid.shape
         assert psi_grid.dtype == np.float64
         assert np.any(psi_grid > 0.0)
         assert np.any(psi_grid < 0.0)

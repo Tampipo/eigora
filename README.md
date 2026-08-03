@@ -27,13 +27,13 @@ pip install -e ".[dev]"
 ## Quick start
 
 ```python
-from physense_utils.grids import Grid1D
+from physense_utils.grids import GridND
 from physense_qm import QuantumSystem1D
 from physense_qm.potentials import HarmonicWell, RectangularBarrier
 from physense_qm.wavepacket import GaussianWavepacket
 
 # Define a grid and a system
-grid = Grid1D(x_min=-8.0, x_max=8.0, n_points=512)
+grid = GridND.line(-8.0, 8.0, 512)
 system = QuantumSystem1D(grid=grid, potential=HarmonicWell(omega=1.0))
 
 # Solve for the 5 lowest eigenstates
@@ -41,7 +41,7 @@ solution = system.solve(n_states=5)
 print(solution.energies)  # [0.5, 1.5, 2.5, 3.5, 4.5]
 
 # Evolve a wavepacket over a barrier
-grid2 = Grid1D(x_min=-20.0, x_max=20.0, n_points=1024)
+grid2 = GridND.line(-20.0, 20.0, 1024)
 system2 = QuantumSystem1D(grid=grid2, potential=RectangularBarrier(height=2.0, width=2.0))
 state = GaussianWavepacket(x0=-8.0, k0=1.5, sigma=1.5)
 evolution = system2.evolve(state, t_max=10.0, dt=0.005, n_frames=80)
