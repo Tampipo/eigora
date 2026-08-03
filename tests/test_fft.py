@@ -4,7 +4,7 @@
 import pytest
 import numpy as np
 from physense_utils.fft import fft1d, ifft1d, fft_frequencies
-from physense_utils.grids import Grid1D
+from physense_utils.grids import GridND
 
 
 class TestFFTFrequencies:
@@ -29,7 +29,7 @@ class TestFFTFrequencies:
 
 class TestFFT1D:
     def test_roundtrip(self):
-        grid = Grid1D(x_min=-10.0, x_max=10.0, n_points=256)
+        grid = GridND.line(-10.0, 10.0, 256)
         f = np.exp(-0.5 * grid.x**2)
         F = fft1d(f, grid.dx)
         f_reconstructed = ifft1d(F, grid.dx)
@@ -38,7 +38,7 @@ class TestFFT1D:
     def test_gaussian_transform(self):
         """FFT of a Gaussian should be a Gaussian."""
         n = 512
-        grid = Grid1D(x_min=-20.0, x_max=20.0, n_points=n)
+        grid = GridND.line(-20.0, 20.0, n)
         sigma = 1.0
         f = np.exp(-0.5 * (grid.x / sigma) ** 2)
         F = fft1d(f, grid.dx)
@@ -49,7 +49,7 @@ class TestFFT1D:
 
     def test_parsevals_theorem(self):
         """Energy should be conserved: integral |f|^2 dx = integral |F|^2 dk / 2pi."""
-        grid = Grid1D(x_min=-10.0, x_max=10.0, n_points=256)
+        grid = GridND.line(-10.0, 10.0, 256)
         n = grid.n_points
         f = np.exp(-0.5 * grid.x**2)
         F = fft1d(f, grid.dx)
