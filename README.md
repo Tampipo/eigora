@@ -2,7 +2,7 @@
 
 Quantum mechanics simulation package for the [Physense](https://physense.tampipo.fr) platform.
 
-Solves the 1D Schrödinger equation numerically, computes eigenstates, and evolves wavepackets in time. Designed to be used as a pure Python library — no web dependencies.
+Solves the 1D Schrödinger equation numerically, computes eigenstates, and evolves wavepackets in time. Potentials and their spectra generalise to any number of dimensions when the system is separable. Designed to be used as a pure Python library — no web dependencies.
 
 > **Units:** atomic units throughout (ℏ = m = 1).
 
@@ -55,6 +55,15 @@ evolution = system2.evolve(state, t_max=10.0, dt=0.005, n_frames=80)
 src/physense_qm/
   potentials/
     known.py        # V(x) catalogue — well, barrier, harmonic, etc.
+    base.py         # PotentialND — any dimension
+    generic.py      # GenericPotential — arbitrary callable, no structure
+    separable.py    # SeparablePotential — sum over disjoint coordinate blocks
+  spectra/
+    base.py         # Spectrum interface, EnergyLevel
+    exact.py        # Analytic solutions + registry
+    numerical.py    # Eigensolver-backed spectrum
+    separable.py    # Product of block spectra
+    factory.py      # spectrum_for — potential → spectrum
   solvers/
     eigensolver.py  # Finite difference Hamiltonian + sparse eigensolver
   states/
@@ -64,7 +73,7 @@ src/physense_qm/
     split_step.py   # Split-step Fourier time evolution
   scattering.py     # Momentum density, energy-averaged transmission
   observables.py    # ⟨x⟩, ⟨p⟩, Δx·Δp, norm
-  system.py         # QuantumSystem1D — high-level facade
+  system.py         # QuantumSystem — high-level facade
 ```
 
 Each sub-package re-exports its public names, so `from physense_qm.potentials
@@ -90,6 +99,75 @@ Potentials can be combined with `+` :
 ```python
 combined = HarmonicWell(omega=1.0) + RectangularBarrier(height=1.0, width=0.5)
 ```
+
+---
+
+## Potentials in any dimension
+
+Two ways to build one. `GenericPotential` wraps an arbitrary callable and carries no structure, so it can only ever be evaluated:
+
+```python
+from physense_qm.potentials import GenericPotential
+
+V = GenericPotential(lambda x, y: 0.5 * (x**2 + y**2) + 0.1 * x * y, ndim=2)
+V.on_grid(GridND.cube(5.0, 128, ndim=2))     # shape (128, 128)
+```
+
+`SeparablePotential` is the interesting one: a sum of sub-system potentials over **disjoint coordinate blocks**, each of its own dimension — a 1D well, a 3D central potential, one of several non-interacting particles. Coordinates are split contiguously in block order:
+
+```python
+from physense_qm.potentials import SeparablePotential, HarmonicWell
+
+trap = SeparablePotential([HarmonicWell(omega=1.0)] * 3)          # 3D isotropic trap
+pair = SeparablePotential([one_particle, one_particle],           # two non-interacting
+                          names=["a", "b"])                       # 3D particles → ndim 6
+```
+
+The blocks are kept as objects rather than collapsed into a callable, because that structure is what makes the solution composable.
+
+---
+
+## Spectra
+
+Every solution — analytic or numerical — implements the same `Spectrum` interface, so blocks compose regardless of how each was solved. `spectrum_for` is the entry point:
+
+```python
+from physense_qm.spectra import spectrum_for
+
+sol = spectrum_for(trap)
+sol.is_exact                 # True — every block had an analytic solution
+sol.quantum_numbers          # ('n_1', 'n_2', 'n_3')
+sol.energy((0, 0, 0))        # 1.5
+sol.wavefunction((1, 0, 2))  # callable(X, Y, Z), the product of block states
+sol.label_text((1, 0, 2))    # 'n_1=1, n_2=0, n_3=2'
+```
+
+Energies add, wavefunctions multiply, quantum numbers concatenate — so degeneracies come out of the enumeration:
+
+```python
+[(lvl.energy, lvl.degeneracy) for lvl in sol.levels(4)]
+# [(1.5, 1), (2.5, 3), (3.5, 6), (4.5, 10)]   — the (n+1)(n+2)/2 tower
+```
+
+A block whose potential has no analytic solution is solved numerically on a grid, behind the same interface. `is_exact` then reports what you actually got:
+
+```python
+mixed = SeparablePotential([HarmonicWell(omega=1.0), DoubleWell(a=1.0, b=4.0)],
+                           names=["osc", "well"])
+sol = spectrum_for(mixed, grid=GridND.line(-8.0, 8.0, 512), n_states=6)
+sol.is_exact                 # False
+sol.quantum_numbers          # ('n_osc', 'n_well')
+sol.energies(5)              # still ascending, still summed block by block
+```
+
+| | analytic | notes |
+|---|---|---|
+| `HarmonicWell` | ✅ `HarmonicSpectrum` | Eₙ = ω(n+½), n ≥ 0 |
+| `InfiniteSquareWell` | ✅ `BoxSpectrum` | Eₙ = n²π²/2L², n ≥ 1 |
+| anything else 1D | numerical | needs a grid; `FiniteSquareWell` is transcendental |
+| anything else N-D | ✗ | build it as a `SeparablePotential` of solvable blocks |
+
+> Only `spectrum` generalises past 1D. `solve` and `evolve` remain 1D numerical methods and raise on a higher-dimensional system.
 
 ---
 
