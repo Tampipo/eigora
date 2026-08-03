@@ -4,7 +4,7 @@
 import pytest
 import numpy as np
 from physense_utils.grids import GridND
-from physense_qm.orbitals import SingleAtomState
+from physense_qm.states.orbitals import SingleAtomState
 
 class TestSingleAtomState:
     def test_basic(self):

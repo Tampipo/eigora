@@ -5,7 +5,7 @@ import pytest
 import numpy as np
 from physense_utils.grids import GridND
 from physense_qm.potentials import FreeParticle, RectangularBarrier
-from physense_qm.wavepacket import GaussianWavepacket
+from physense_qm.states.wavepacket import GaussianWavepacket
 from physense_qm.evolution import evolve
 from physense_qm import observables
 

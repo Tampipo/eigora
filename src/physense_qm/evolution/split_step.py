@@ -20,7 +20,7 @@ from physense_utils.grids import GridND
 from physense_utils.fft import fft_frequencies
 
 from physense_qm.potentials import Potential
-from physense_qm.wavepacket import InitialState
+from physense_qm.states.wavepacket import InitialState
 
 
 @dataclass(frozen=True)

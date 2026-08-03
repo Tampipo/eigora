@@ -30,7 +30,7 @@ pip install -e ".[dev]"
 from physense_utils.grids import GridND
 from physense_qm import QuantumSystem1D
 from physense_qm.potentials import HarmonicWell, RectangularBarrier
-from physense_qm.wavepacket import GaussianWavepacket
+from physense_qm.states import GaussianWavepacket
 
 # Define a grid and a system
 grid = GridND.line(-8.0, 8.0, 512)
@@ -53,13 +53,23 @@ evolution = system2.evolve(state, t_max=10.0, dt=0.005, n_frames=80)
 
 ```
 src/physense_qm/
-  potentials.py     # V(x) functions — well, barrier, harmonic, etc.
-  eigensolver.py    # Finite difference Hamiltonian + sparse eigensolver
-  wavepacket.py     # Initial states (GaussianWavepacket)
-  evolution.py      # Split-step Fourier time evolution
+  potentials/
+    known.py        # V(x) catalogue — well, barrier, harmonic, etc.
+  solvers/
+    eigensolver.py  # Finite difference Hamiltonian + sparse eigensolver
+  states/
+    wavepacket.py   # Initial states (GaussianWavepacket)
+    orbitals.py     # Hydrogen-like atomic orbitals (SingleAtomState)
+  evolution/
+    split_step.py   # Split-step Fourier time evolution
+  scattering.py     # Momentum density, energy-averaged transmission
   observables.py    # ⟨x⟩, ⟨p⟩, Δx·Δp, norm
   system.py         # QuantumSystem1D — high-level facade
 ```
+
+Each sub-package re-exports its public names, so `from physense_qm.potentials
+import HarmonicWell` and `from physense_qm.evolution import evolve` work
+without reaching into the concrete module.
 
 ---
 
