@@ -60,9 +60,21 @@ class Operator:
         """Dimension of the Hilbert space."""
         return self.matrix.shape[0]
 
+    @classmethod
+    def _wrap(cls, matrix: Matrix) -> "Operator":
+        """
+        Rebuild this class around a new matrix, after an operation.
+
+        Subclasses built from physical parameters rather than a matrix
+        override this to degrade to their generic ancestor: a scaled or
+        embedded `TwoLevel` is no longer that two-level system, and must not
+        keep its closed-form spectrum.
+        """
+        return cls(matrix)
+
     def dagger(self) -> "Operator":
         """The adjoint A†. Hermiticity is preserved, so the class is kept."""
-        return type(self)(_dagger(self.matrix))
+        return type(self)._wrap(_dagger(self.matrix))
 
     def is_hermitian(self, tol: float = 1e-10) -> bool:
         """True if A† = A, so that `Observable(self.matrix)` would be accepted."""
@@ -78,21 +90,21 @@ class Operator:
         return Operator(self.matrix @ other.matrix)
 
     def __add__(self, other: "Operator") -> "Operator":
-        return _common(self, other)(self.matrix + other.matrix)
+        return _common(self, other)._wrap(self.matrix + other.matrix)
 
     def __sub__(self, other: "Operator") -> "Operator":
-        return _common(self, other)(self.matrix - other.matrix)
+        return _common(self, other)._wrap(self.matrix - other.matrix)
 
     def __mul__(self, scalar: complex) -> "Operator":
         # A real multiple of a Hermitian operator stays Hermitian; 1j * A
         # is anti-Hermitian.
         cls = type(self) if np.isreal(scalar) else Operator
-        return cls(self.matrix * scalar)
+        return cls._wrap(self.matrix * scalar)
 
     __rmul__ = __mul__
 
     def __neg__(self) -> "Operator":
-        return type(self)(-self.matrix)
+        return type(self)._wrap(-self.matrix)
 
 
 @dataclass(frozen=True)
@@ -282,7 +294,7 @@ def anticommutator(A: Operator, B: Operator) -> Operator:
     Unlike the commutator this is Hermitian whenever A and B are
     ({A,B}† = B†A† + A†B† = {A,B}), so the class is kept.
     """
-    return _common(A, B)(_anticommutator(A.matrix, B.matrix))
+    return _common(A, B)._wrap(_anticommutator(A.matrix, B.matrix))
 
 
 def tensor_product(A: Operator, B: Operator) -> Operator:
@@ -355,7 +367,7 @@ def embed(operator: Operator, site: int, dims: Sequence[int]) -> Operator:
 
     factors: list[Matrix] = [np.eye(d, dtype=complex) for d in dims]
     factors[site] = operator.matrix
-    return type(operator)(reduce(_tensor_product, factors))
+    return type(operator)._wrap(reduce(_tensor_product, factors))
 
 
 def _constant(cls: type[Operator], matrix: Matrix) -> Operator:
@@ -383,21 +395,26 @@ SMINUS = _constant(Operator, [[0, 0], [1, 0]])
 
 def _common(a: Operator, b: Operator) -> type[Operator]:
     """
-    The more specific of two classes, when one derives from the other.
+    The nearest class both operands belong to.
 
     Used by the operations that provably preserve Hermiticity, so that
     `H_free + H_interaction` comes back a `Hamiltonian` rather than a bare
     `Operator`. Symmetric: the result does not depend on operand order.
 
-    Note this reconstructs via `cls(matrix)`, so any subclass must keep the
-    single-matrix constructor signature -- which is why the known systems in
-    `hamiltonians` are factory functions rather than subclasses.
+    Walking the ancestry rather than comparing the two types directly matters
+    for siblings: `TwoLevel + SpinInField` are unrelated to each other but
+    both Hamiltonians, and the sum should say so.
+
+    The result is rebuilt through `_wrap`, so classes whose constructor takes
+    physical parameters instead of a matrix can degrade gracefully.
     """
-    if isinstance(b, type(a)):
-        return type(a)
-    if isinstance(a, type(b)):
-        return type(b)
-    return Operator
+    # Most-derived first; the first class `b` also belongs to is their nearest
+    # common ancestor. `Operator` always matches, so this cannot come up empty.
+    return next(
+        cls
+        for cls in type(a).__mro__
+        if issubclass(cls, Operator) and isinstance(b, cls)
+    )
 
 
 __all__ = [
