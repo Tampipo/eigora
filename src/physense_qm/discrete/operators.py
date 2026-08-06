@@ -17,6 +17,11 @@ from functools import cached_property
 import numpy as np
 from numpy.typing import NDArray
 
+from physense_qm.discrete.measurement import (
+    Outcome,
+    outcomes as _outcomes,
+    sample as _sample,
+)
 from physense_qm.discrete.operations import (
     Matrix,
     anticommutator as _anticommutator,
@@ -160,6 +165,55 @@ class Observable(Operator):
         Assumes `psi` is normalised.
         """
         return float(np.real(np.vdot(psi, self.matrix @ psi)))
+
+    def outcomes(self, psi: Matrix, tol: float = 1e-9) -> list[Outcome]:
+        """
+        The possible results of measuring this observable on `psi`.
+
+        One entry per *distinct* eigenvalue, so a degenerate eigenvalue
+        appears once, with its probability summed over the whole subspace.
+
+        Parameters
+        ----------
+        psi : Matrix of shape (dim,)
+            State to measure. Normalised on the way in.
+        tol : float
+            Tolerance for calling two eigenvalues degenerate.
+
+        Returns
+        -------
+        list of Outcome
+        """
+        return _outcomes(
+            self.eigensystem.eigenvalues, self.eigensystem.eigenvectors, psi, tol
+        )
+
+    def measure(
+        self,
+        psi: Matrix,
+        rng: np.random.Generator | None = None,
+        tol: float = 1e-9,
+    ) -> tuple[Outcome, Matrix]:
+        """
+        Perform a projective measurement: draw an outcome, then collapse.
+
+        Parameters
+        ----------
+        psi : Matrix of shape (dim,)
+            State to measure.
+        rng : np.random.Generator, optional
+            Source of randomness; a fresh default generator if omitted.
+        tol : float
+            Tolerance for calling two eigenvalues degenerate.
+
+        Returns
+        -------
+        (Outcome, Matrix)
+            The result observed and the post-measurement state.
+        """
+        return _sample(
+            self.eigensystem.eigenvalues, self.eigensystem.eigenvectors, psi, rng, tol
+        )
 
 
 @dataclass(frozen=True)
