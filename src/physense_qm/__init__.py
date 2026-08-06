@@ -32,6 +32,7 @@ from physense_qm.states import InitialState, GaussianWavepacket, SingleAtomState
 from physense_qm.evolution import Evolution, evolve
 from physense_qm.scattering import momentum_density, energy_averaged_transmission
 from physense_qm import observables
+from physense_qm import discrete
 
 __all__ = [
     "QuantumSystem",
@@ -67,4 +68,5 @@ __all__ = [
     "momentum_density",
     "energy_averaged_transmission",
     "observables",
+    "discrete",
 ]
