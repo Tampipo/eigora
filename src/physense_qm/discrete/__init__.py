@@ -29,7 +29,15 @@ from physense_qm.discrete.operators import (
     SPLUS,
     SMINUS,
 )
-from physense_qm.discrete.hamiltonians import noninteracting
+from physense_qm.discrete.hamiltonians import (
+    HarmonicLadder,
+    HeisenbergChain,
+    KnownHamiltonian,
+    Rabi,
+    SpinInField,
+    TwoLevel,
+    noninteracting,
+)
 from physense_qm.discrete.evolution import Evolution, evolve
 
 __all__ = [
@@ -44,6 +52,12 @@ __all__ = [
     "commutator",
     "anticommutator",
     "tensor_product",
+    "KnownHamiltonian",
+    "TwoLevel",
+    "Rabi",
+    "SpinInField",
+    "HarmonicLadder",
+    "HeisenbergChain",
     "noninteracting",
     "Evolution",
     "evolve",
