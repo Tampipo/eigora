@@ -21,6 +21,13 @@ from physense_qm.discrete.operators import (
     commutator,
     anticommutator,
     tensor_product,
+    identity,
+    embed,
+    SX,
+    SY,
+    SZ,
+    SPLUS,
+    SMINUS,
 )
 from physense_qm.discrete.hamiltonians import noninteracting
 from physense_qm.discrete.evolution import Evolution, evolve
@@ -40,4 +47,11 @@ __all__ = [
     "noninteracting",
     "Evolution",
     "evolve",
+    "identity",
+    "embed",
+    "SX",
+    "SY",
+    "SZ",
+    "SPLUS",
+    "SMINUS",
 ]

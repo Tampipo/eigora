@@ -5,14 +5,9 @@
 Known discrete Hamiltonians, and ways of combining them.
 """
 
-import math
 from collections.abc import Sequence
-from functools import reduce
 
-import numpy as np
-
-from physense_qm.discrete.operations import Matrix, tensor_product
-from physense_qm.discrete.operators import Hamiltonian
+from physense_qm.discrete.operators import Hamiltonian, embed
 
 
 def noninteracting(hamiltonians: Sequence[Hamiltonian]) -> Hamiltonian:
@@ -37,13 +32,10 @@ def noninteracting(hamiltonians: Sequence[Hamiltonian]) -> Hamiltonian:
         raise ValueError("at least one Hamiltonian is required")
 
     dims = [h.dim for h in hamiltonians]
-    total_dim = math.prod(dims)
-    total = np.zeros((total_dim, total_dim), dtype=complex)
-    for k, h in enumerate(hamiltonians):
-        factors: list[Matrix] = [np.eye(d, dtype=complex) for d in dims]
-        factors[k] = h.matrix
-        total += reduce(tensor_product, factors)
-    return Hamiltonian(total)
+    total = embed(hamiltonians[0], 0, dims)
+    for site, hamiltonian in enumerate(hamiltonians[1:], start=1):
+        total = total + embed(hamiltonian, site, dims)
+    return total
 
 
 __all__ = ["noninteracting"]

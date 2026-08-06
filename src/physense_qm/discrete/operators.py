@@ -11,8 +11,9 @@ orthonormal eigenbasis, and `Hamiltonian` is the observable that generates
 time translation.
 """
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from functools import cached_property
+from functools import cached_property, reduce
 
 import numpy as np
 from numpy.typing import NDArray
@@ -294,6 +295,92 @@ def tensor_product(A: Operator, B: Operator) -> Operator:
     return Operator(_tensor_product(A.matrix, B.matrix))
 
 
+def identity(dim: int) -> Observable:
+    """
+    The identity operator on a `dim`-dimensional space.
+
+    Parameters
+    ----------
+    dim : int
+        Dimension of the Hilbert space.
+
+    Returns
+    -------
+    Observable
+        Hermitian (and unitary), so usable as a tensor factor anywhere.
+    """
+    if dim < 1:
+        raise ValueError(f"dim must be at least 1, got {dim}")
+    return _constant(Observable, np.eye(dim))
+
+
+def embed(operator: Operator, site: int, dims: Sequence[int]) -> Operator:
+    """
+    Lift a single-subsystem operator to the whole product space.
+
+    Returns I ⊗ ... ⊗ A ⊗ ... ⊗ I, with `operator` in the `site`-th tensor
+    slot. This is the way to build a composite observable: total S_z on two
+    spins is `embed(SZ, 0, dims) + embed(SZ, 1, dims)`, whose eigenvalues are
+    the sums +2, 0, 0, -2 -- unlike `tensor_product(SZ, SZ)`, which multiplies
+    them.
+
+    Unlike `tensor_product`, this preserves the class: padding with identities
+    changes neither Hermiticity nor what the operator means, so an `Observable`
+    stays measurable and a `Hamiltonian` stays a Hamiltonian (of a composite
+    system in which only that subsystem carries energy).
+
+    Parameters
+    ----------
+    operator : Operator
+        Acts on subsystem `site` alone.
+    site : int
+        Which tensor factor it occupies.
+    dims : sequence of int
+        Dimension of every subsystem, in tensor-factor order.
+
+    Returns
+    -------
+    Operator
+        Of dimension prod(dims), the same class as `operator`.
+    """
+    dims = list(dims)
+    if not dims:
+        raise ValueError("dims must name at least one subsystem")
+    if not 0 <= site < len(dims):
+        raise ValueError(f"site {site} out of range for {len(dims)} subsystem(s)")
+    if operator.dim != dims[site]:
+        raise ValueError(
+            f"operator is {operator.dim}D but subsystem {site} is {dims[site]}D"
+        )
+
+    factors: list[Matrix] = [np.eye(d, dtype=complex) for d in dims]
+    factors[site] = operator.matrix
+    return type(operator)(reduce(_tensor_product, factors))
+
+
+def _constant(cls: type[Operator], matrix: Matrix) -> Operator:
+    """
+    Build a shared operator whose matrix cannot be mutated in place.
+
+    These are module-level singletons, so an in-place write by one caller
+    would be visible to every other one.
+    """
+    array = np.asarray(matrix, dtype=complex)
+    array.setflags(write=False)
+    return cls(array)
+
+
+#: Pauli matrices, eigenvalues ±1. Note [SX, SY] = 2i·SZ, and SX² = I.
+SX = _constant(Observable, [[0, 1], [1, 0]])
+SY = _constant(Observable, [[0, -1j], [1j, 0]])
+SZ = _constant(Observable, [[1, 0], [0, -1]])
+
+#: Ladder operators, S± = (SX ± i·SY)/2. Not Hermitian, hence not observables
+#: -- they raise and lower rather than being measured.
+SPLUS = _constant(Operator, [[0, 1], [0, 0]])
+SMINUS = _constant(Operator, [[0, 0], [1, 0]])
+
+
 def _common(a: Operator, b: Operator) -> type[Operator]:
     """
     The more specific of two classes, when one derives from the other.
@@ -321,4 +408,11 @@ __all__ = [
     "commutator",
     "anticommutator",
     "tensor_product",
+    "identity",
+    "embed",
+    "SX",
+    "SY",
+    "SZ",
+    "SPLUS",
+    "SMINUS",
 ]
