@@ -1,4 +1,4 @@
-# Copyright (C) 2026 Tanguy Marsault - PhySense
+# Copyright (C) 2026 Tanguy Marsault - Eigora
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 """
@@ -10,17 +10,17 @@ blocks compose into the same separable system. `spectrum_for` is the entry
 point.
 """
 
-from physense_qm.spectra.base import EnergyLevel, Label, Spectrum
-from physense_qm.spectra.exact import (
+from eigora.qm.spectra.base import EnergyLevel, Label, Spectrum
+from eigora.qm.spectra.exact import (
     EXACT_SPECTRA,
     BoxSpectrum,
     HarmonicSpectrum,
     exact_spectrum,
     has_exact_spectrum,
 )
-from physense_qm.spectra.numerical import NumericalSpectrum
-from physense_qm.spectra.separable import SeparableSpectrum
-from physense_qm.spectra.factory import spectrum_for
+from eigora.qm.spectra.numerical import NumericalSpectrum
+from eigora.qm.spectra.separable import SeparableSpectrum
+from eigora.qm.spectra.factory import spectrum_for
 
 __all__ = [
     "Spectrum",

@@ -1,4 +1,4 @@
-# Copyright (C) 2026 Tanguy Marsault - PhySense
+# Copyright (C) 2026 Tanguy Marsault - Eigora
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 """
@@ -21,7 +21,7 @@ from dataclasses import dataclass
 import numpy as np
 from numpy.typing import NDArray
 
-from physense_qm.discrete.operations import Matrix
+from eigora.qm.discrete.operations import Matrix
 
 
 @dataclass(frozen=True)

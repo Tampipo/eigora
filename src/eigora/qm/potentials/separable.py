@@ -1,4 +1,4 @@
-# Copyright (C) 2026 Tanguy Marsault - PhySense
+# Copyright (C) 2026 Tanguy Marsault - Eigora
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 """
@@ -11,7 +11,7 @@ Each block has its own dimension -- a 1D well, a 3D central potential, one of
 several non-interacting particles. The blocks are kept as objects rather than
 collapsed into a single callable, because that structure is exactly what makes
 the solution composable: energies add, wavefunctions multiply, quantum numbers
-concatenate (see `physense_qm.spectra`).
+concatenate (see `eigora.qm.spectra`).
 """
 
 from collections.abc import Callable, Sequence
@@ -19,7 +19,7 @@ from collections.abc import Callable, Sequence
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
-from physense_qm.potentials.base import PotentialND
+from eigora.qm.potentials.base import PotentialND
 
 
 class Block1D(PotentialND):
@@ -64,7 +64,7 @@ class SeparablePotential(PotentialND):
 
     Example
     -------
-    >>> from physense_qm.potentials import HarmonicWell
+    >>> from eigora.qm.potentials import HarmonicWell
     >>> V = SeparablePotential([HarmonicWell(omega=1.0)] * 3)   # 3D isotropic trap
     >>> V.ndim
     3

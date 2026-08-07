@@ -1,4 +1,4 @@
-# Copyright (C) 2026 Tanguy Marsault - PhySense
+# Copyright (C) 2026 Tanguy Marsault - Eigora
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 """
@@ -26,8 +26,8 @@ from functools import cached_property
 
 import numpy as np
 
-from physense_qm.discrete.operations import Matrix
-from physense_qm.discrete.operators import (
+from eigora.qm.discrete.operations import Matrix
+from eigora.qm.discrete.operators import (
     SX,
     SY,
     SZ,

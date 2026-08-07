@@ -1,19 +1,19 @@
-# Copyright (C) 2026 Tanguy Marsault - PhySense
+# Copyright (C) 2026 Tanguy Marsault - Eigora
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 """
 High-level interface for quantum mechanics simulations.
 """
 
-from physense_utils.grids import GridND
+from eigora.grids import GridND
 
-from physense_qm.potentials.base import PotentialND
-from physense_qm.potentials.known import Potential
-from physense_qm.solvers.eigensolver import EigenSolution, solve_eigenstates
-from physense_qm.spectra.base import Spectrum
-from physense_qm.spectra.factory import spectrum_for
-from physense_qm.states.wavepacket import InitialState
-from physense_qm.evolution.split_step import Evolution, evolve
+from eigora.qm.potentials.base import PotentialND
+from eigora.qm.potentials.known import Potential
+from eigora.qm.solvers.eigensolver import EigenSolution, solve_eigenstates
+from eigora.qm.spectra.base import Spectrum
+from eigora.qm.spectra.factory import spectrum_for
+from eigora.qm.states.wavepacket import InitialState
+from eigora.qm.evolution.split_step import Evolution, evolve
 
 
 class QuantumSystem:
@@ -25,10 +25,10 @@ class QuantumSystem:
 
     Example
     -------
-    >>> from physense_utils.grids import GridND
-    >>> from physense_qm import QuantumSystem
-    >>> from physense_qm.potentials import HarmonicWell, SeparablePotential
-    >>> from physense_qm.states import GaussianWavepacket
+    >>> from eigora.grids import GridND
+    >>> from eigora.qm import QuantumSystem
+    >>> from eigora.qm.potentials import HarmonicWell, SeparablePotential
+    >>> from eigora.qm.states import GaussianWavepacket
     >>>
     >>> grid = GridND.line(-10.0, 10.0, 512)
     >>> system = QuantumSystem(grid=grid, potential=HarmonicWell(omega=1.0))

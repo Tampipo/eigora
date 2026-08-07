@@ -1,4 +1,4 @@
-# Copyright (C) 2026 Tanguy Marsault - PhySense
+# Copyright (C) 2026 Tanguy Marsault - Eigora
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 """
@@ -9,14 +9,14 @@ solution if its potential has one and the numerical solver otherwise, then
 composes the results.
 """
 
-from physense_utils.grids import GridND
+from eigora.grids import GridND
 
-from physense_qm.potentials.base import PotentialND
-from physense_qm.potentials.separable import SeparablePotential, as_block
-from physense_qm.spectra.base import Spectrum
-from physense_qm.spectra.exact import exact_spectrum, has_exact_spectrum
-from physense_qm.spectra.numerical import NumericalSpectrum
-from physense_qm.spectra.separable import SeparableSpectrum
+from eigora.qm.potentials.base import PotentialND
+from eigora.qm.potentials.separable import SeparablePotential, as_block
+from eigora.qm.spectra.base import Spectrum
+from eigora.qm.spectra.exact import exact_spectrum, has_exact_spectrum
+from eigora.qm.spectra.numerical import NumericalSpectrum
+from eigora.qm.spectra.separable import SeparableSpectrum
 
 
 def spectrum_for(

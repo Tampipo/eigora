@@ -1,10 +1,10 @@
-# Copyright (C) 2026 Tanguy Marsault - PhySense
+# Copyright (C) 2026 Tanguy Marsault - Eigora
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 import pytest
 import numpy as np
-from physense_utils.grids import GridND
-from physense_qm.states.orbitals import SingleAtomState
+from eigora.grids import GridND
+from eigora.qm.states.orbitals import SingleAtomState
 
 class TestSingleAtomState:
     def test_basic(self):

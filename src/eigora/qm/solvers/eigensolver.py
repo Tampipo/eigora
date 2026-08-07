@@ -1,4 +1,4 @@
-# Copyright (C) 2026 Tanguy Marsault - PhySense
+# Copyright (C) 2026 Tanguy Marsault - Eigora
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 """
@@ -13,9 +13,9 @@ import scipy.sparse as sp
 import scipy.sparse.linalg as spla
 from numpy.typing import NDArray
 
-from physense_utils.grids import GridND
+from eigora.grids import GridND
 
-from physense_qm.potentials import Potential
+from eigora.qm.potentials import Potential
 
 
 @dataclass(frozen=True)

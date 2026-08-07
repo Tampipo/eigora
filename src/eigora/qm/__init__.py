@@ -1,8 +1,8 @@
-# Copyright (C) 2026 Tanguy Marsault - PhySense
+# Copyright (C) 2026 Tanguy Marsault - Eigora
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
-from physense_qm.system import QuantumSystem, QuantumSystem1D
-from physense_qm.potentials import (
+from eigora.qm.system import QuantumSystem, QuantumSystem1D
+from eigora.qm.potentials import (
     Potential,
     CompositePotential,
     FreeParticle,
@@ -18,7 +18,7 @@ from physense_qm.potentials import (
     Block1D,
     SeparablePotential,
 )
-from physense_qm.spectra import (
+from eigora.qm.spectra import (
     Spectrum,
     EnergyLevel,
     HarmonicSpectrum,
@@ -27,12 +27,12 @@ from physense_qm.spectra import (
     SeparableSpectrum,
     spectrum_for,
 )
-from physense_qm.solvers import EigenSolution, solve_eigenstates
-from physense_qm.states import InitialState, GaussianWavepacket, SingleAtomState
-from physense_qm.evolution import Evolution, evolve
-from physense_qm.scattering import momentum_density, energy_averaged_transmission
-from physense_qm import observables
-from physense_qm import discrete
+from eigora.qm.solvers import EigenSolution, solve_eigenstates
+from eigora.qm.states import InitialState, GaussianWavepacket, SingleAtomState
+from eigora.qm.evolution import Evolution, evolve
+from eigora.qm.scattering import momentum_density, energy_averaged_transmission
+from eigora.qm import observables
+from eigora.qm import discrete
 
 __all__ = [
     "QuantumSystem",

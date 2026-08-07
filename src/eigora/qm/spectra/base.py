@@ -1,4 +1,4 @@
-# Copyright (C) 2026 Tanguy Marsault - PhySense
+# Copyright (C) 2026 Tanguy Marsault - Eigora
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 """
@@ -20,7 +20,7 @@ from dataclasses import dataclass
 import numpy as np
 from numpy.typing import NDArray
 
-from physense_utils.grids import GridND
+from eigora.grids import GridND
 
 # Quantum numbers identifying one state, e.g. (2,) or (n, l, m) or (n_1, n_2).
 Label = tuple[int, ...]

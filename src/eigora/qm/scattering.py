@@ -1,4 +1,4 @@
-# Copyright (C) 2026 Tanguy Marsault - PhySense
+# Copyright (C) 2026 Tanguy Marsault - Eigora
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 """
@@ -9,8 +9,8 @@ Atomic units: hbar = m = 1.
 import numpy as np
 from numpy.typing import NDArray
 
-from physense_qm.potentials import RectangularBarrier
-from physense_qm.states.wavepacket import GaussianWavepacket
+from eigora.qm.potentials import RectangularBarrier
+from eigora.qm.states.wavepacket import GaussianWavepacket
 
 
 def momentum_density(

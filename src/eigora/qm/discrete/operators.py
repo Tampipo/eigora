@@ -1,4 +1,4 @@
-# Copyright (C) 2026 Tanguy Marsault - PhySense
+# Copyright (C) 2026 Tanguy Marsault - Eigora
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 """
@@ -18,12 +18,12 @@ from functools import cached_property, reduce
 import numpy as np
 from numpy.typing import NDArray
 
-from physense_qm.discrete.measurement import (
+from eigora.qm.discrete.measurement import (
     Outcome,
     outcomes as _outcomes,
     sample as _sample,
 )
-from physense_qm.discrete.operations import (
+from eigora.qm.discrete.operations import (
     Matrix,
     anticommutator as _anticommutator,
     commutator as _commutator,
@@ -235,7 +235,7 @@ class Hamiltonian(Observable):
     The generator of time translation.
 
     Adds the energy vocabulary and the propagator; the evolution of a state
-    itself lives in `physense_qm.discrete.evolution`.
+    itself lives in `eigora.qm.discrete.evolution`.
     """
 
     def eigenenergies(self) -> NDArray[np.float64]:

@@ -1,4 +1,4 @@
-# Copyright (C) 2026 Tanguy Marsault - PhySense
+# Copyright (C) 2026 Tanguy Marsault - Eigora
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 """
@@ -16,11 +16,11 @@ from dataclasses import dataclass
 import numpy as np
 from numpy.typing import NDArray
 
-from physense_utils.grids import GridND
-from physense_utils.fft import fft_frequencies
+from eigora.grids import GridND
+from eigora.fft import fft_frequencies
 
-from physense_qm.potentials import Potential
-from physense_qm.states.wavepacket import InitialState
+from eigora.qm.potentials import Potential
+from eigora.qm.states.wavepacket import InitialState
 
 
 @dataclass(frozen=True)

@@ -1,12 +1,12 @@
-# Copyright (C) 2026 Tanguy Marsault - PhySense
+# Copyright (C) 2026 Tanguy Marsault - Eigora
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 import pytest
 import numpy as np
 
-from physense_utils.grids import GridND
+from eigora.grids import GridND
 
-from physense_qm.potentials import (
+from eigora.qm.potentials import (
     Block1D,
     DoubleWell,
     GenericPotential,
@@ -16,7 +16,7 @@ from physense_qm.potentials import (
     SumPotential,
     as_block,
 )
-from physense_qm.solvers import solve_eigenstates
+from eigora.qm.solvers import solve_eigenstates
 
 
 class TestCallConvention:

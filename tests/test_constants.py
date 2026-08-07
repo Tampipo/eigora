@@ -1,8 +1,8 @@
-# Copyright (C) 2026 Tanguy Marsault - PhySense
+# Copyright (C) 2026 Tanguy Marsault - Eigora
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 import pytest
-from physense_utils import constants as C
+from eigora import constants as C
 
 
 def test_hbar_positive():

@@ -1,4 +1,4 @@
-# Copyright (C) 2026 Tanguy Marsault - PhySense
+# Copyright (C) 2026 Tanguy Marsault - Eigora
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 """
@@ -10,10 +10,10 @@ behind the `operations` namespace: `discrete.operations.commutator(a, b)`
 takes matrices, `discrete.commutator(A, B)` takes `Operator`s.
 """
 
-from physense_qm.discrete import measurement, operations
-from physense_qm.discrete.operations import Matrix
-from physense_qm.discrete.measurement import Outcome
-from physense_qm.discrete.operators import (
+from eigora.qm.discrete import measurement, operations
+from eigora.qm.discrete.operations import Matrix
+from eigora.qm.discrete.measurement import Outcome
+from eigora.qm.discrete.operators import (
     Operator,
     Eigensystem,
     Observable,
@@ -29,7 +29,7 @@ from physense_qm.discrete.operators import (
     SPLUS,
     SMINUS,
 )
-from physense_qm.discrete.hamiltonians import (
+from eigora.qm.discrete.hamiltonians import (
     HarmonicLadder,
     HeisenbergChain,
     KnownHamiltonian,
@@ -38,7 +38,7 @@ from physense_qm.discrete.hamiltonians import (
     TwoLevel,
     noninteracting,
 )
-from physense_qm.discrete.evolution import Evolution, evolve
+from eigora.qm.discrete.evolution import Evolution, evolve
 
 __all__ = [
     "measurement",

@@ -1,9 +1,9 @@
-# Copyright (C) 2026 Tanguy Marsault - PhySense
+# Copyright (C) 2026 Tanguy Marsault - Eigora
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 import pytest
 import numpy as np
-from physense_utils.grids import (
+from eigora.grids import (
     Axis,
     GridND,
     default_axis_names,

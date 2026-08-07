@@ -1,4 +1,4 @@
-# Copyright (C) 2026 Tanguy Marsault - PhySense
+# Copyright (C) 2026 Tanguy Marsault - Eigora
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 """
@@ -15,9 +15,9 @@ import numpy as np
 from numpy.typing import NDArray
 from scipy.special import eval_hermite, gammaln
 
-from physense_qm.potentials.known import HarmonicWell, InfiniteSquareWell, Potential
-from physense_qm.potentials.separable import Block1D
-from physense_qm.spectra.base import Label, Spectrum
+from eigora.qm.potentials.known import HarmonicWell, InfiniteSquareWell, Potential
+from eigora.qm.potentials.separable import Block1D
+from eigora.qm.spectra.base import Label, Spectrum
 
 
 class HarmonicSpectrum(Spectrum):

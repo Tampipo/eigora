@@ -1,9 +1,9 @@
-# Copyright (C) 2026 Tanguy Marsault - PhySense
+# Copyright (C) 2026 Tanguy Marsault - Eigora
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 import pytest
 import numpy as np
-from physense_utils.functions import gaussian, sinc, heaviside
+from eigora.functions import gaussian, sinc, heaviside
 
 
 class TestGaussian:

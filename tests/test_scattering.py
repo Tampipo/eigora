@@ -1,12 +1,12 @@
-# Copyright (C) 2026 Tanguy Marsault - PhySense
+# Copyright (C) 2026 Tanguy Marsault - Eigora
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 import numpy as np
 import pytest
 
-from physense_qm.potentials import RectangularBarrier
-from physense_qm.states.wavepacket import GaussianWavepacket
-from physense_qm.scattering import momentum_density, energy_averaged_transmission
+from eigora.qm.potentials import RectangularBarrier
+from eigora.qm.states.wavepacket import GaussianWavepacket
+from eigora.qm.scattering import momentum_density, energy_averaged_transmission
 
 
 class TestMomentumDensity:

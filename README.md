@@ -1,6 +1,6 @@
-# physense-qm
+# eigora
 
-Quantum mechanics simulation package for the [Physense](https://physense.tampipo.fr) platform.
+Quantum mechanics simulation package for the [Eigora](https://eigora.tampipo.fr) platform.
 
 Solves the 1D Schrödinger equation numerically, computes eigenstates, and evolves wavepackets in time. Potentials and their spectra generalise to any number of dimensions when the system is separable. Designed to be used as a pure Python library — no web dependencies.
 
@@ -11,14 +11,14 @@ Solves the 1D Schrödinger equation numerically, computes eigenstates, and evolv
 ## Installation
 
 ```bash
-pip install git+https://github.com/Tampipo/physense-qm
+pip install git+https://github.com/Tampipo/eigora
 ```
 
 For development:
 
 ```bash
-git clone https://github.com/Tampipo/physense-qm
-cd physense-qm
+git clone https://github.com/Tampipo/eigora
+cd eigora
 pip install -e ".[dev]"
 ```
 
@@ -27,10 +27,10 @@ pip install -e ".[dev]"
 ## Quick start
 
 ```python
-from physense_utils.grids import GridND
-from physense_qm import QuantumSystem1D
-from physense_qm.potentials import HarmonicWell, RectangularBarrier
-from physense_qm.states import GaussianWavepacket
+from eigora.grids import GridND
+from eigora.qm import QuantumSystem1D
+from eigora.qm.potentials import HarmonicWell, RectangularBarrier
+from eigora.qm.states import GaussianWavepacket
 
 # Define a grid and a system
 grid = GridND.line(-8.0, 8.0, 512)
@@ -52,7 +52,7 @@ evolution = system2.evolve(state, t_max=10.0, dt=0.005, n_frames=80)
 ## Structure
 
 ```
-src/physense_qm/
+src/eigora.qm/
   potentials/
     known.py        # V(x) catalogue — well, barrier, harmonic, etc.
     base.py         # PotentialND — any dimension
@@ -76,8 +76,8 @@ src/physense_qm/
   system.py         # QuantumSystem — high-level facade
 ```
 
-Each sub-package re-exports its public names, so `from physense_qm.potentials
-import HarmonicWell` and `from physense_qm.evolution import evolve` work
+Each sub-package re-exports its public names, so `from eigora.qm.potentials
+import HarmonicWell` and `from eigora.qm.evolution import evolve` work
 without reaching into the concrete module.
 
 ---
@@ -107,7 +107,7 @@ combined = HarmonicWell(omega=1.0) + RectangularBarrier(height=1.0, width=0.5)
 Two ways to build one. `GenericPotential` wraps an arbitrary callable and carries no structure, so it can only ever be evaluated:
 
 ```python
-from physense_qm.potentials import GenericPotential
+from eigora.qm.potentials import GenericPotential
 
 V = GenericPotential(lambda x, y: 0.5 * (x**2 + y**2) + 0.1 * x * y, ndim=2)
 V.on_grid(GridND.cube(5.0, 128, ndim=2))     # shape (128, 128)
@@ -116,7 +116,7 @@ V.on_grid(GridND.cube(5.0, 128, ndim=2))     # shape (128, 128)
 `SeparablePotential` is the interesting one: a sum of sub-system potentials over **disjoint coordinate blocks**, each of its own dimension — a 1D well, a 3D central potential, one of several non-interacting particles. Coordinates are split contiguously in block order:
 
 ```python
-from physense_qm.potentials import SeparablePotential, HarmonicWell
+from eigora.qm.potentials import SeparablePotential, HarmonicWell
 
 trap = SeparablePotential([HarmonicWell(omega=1.0)] * 3)          # 3D isotropic trap
 pair = SeparablePotential([one_particle, one_particle],           # two non-interacting
@@ -132,7 +132,7 @@ The blocks are kept as objects rather than collapsed into a callable, because th
 Every solution — analytic or numerical — implements the same `Spectrum` interface, so blocks compose regardless of how each was solved. `spectrum_for` is the entry point:
 
 ```python
-from physense_qm.spectra import spectrum_for
+from eigora.qm.spectra import spectrum_for
 
 sol = spectrum_for(trap)
 sol.is_exact                 # True — every block had an analytic solution
@@ -216,7 +216,7 @@ evolution.norm(i)                    # should remain ≈ 1.0
 ## Observables
 
 ```python
-from physense_qm import observables
+from eigora.qm import observables
 
 observables.expectation_x(psi, grid)     # ⟨x⟩
 observables.expectation_p(psi, grid)     # ⟨p⟩
@@ -240,4 +240,4 @@ pytest
 
 - `numpy >= 2.0`
 - `scipy >= 1.13`
-- `physense-utils`
+- `eigora`

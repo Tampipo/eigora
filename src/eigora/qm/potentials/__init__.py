@@ -1,4 +1,4 @@
-# Copyright (C) 2026 Tanguy Marsault - PhySense
+# Copyright (C) 2026 Tanguy Marsault - Eigora
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 """
@@ -8,11 +8,11 @@ Quantum potentials.
 double well, ...). `base`, `generic` and `separable` generalise to any
 dimension: wrap an arbitrary callable with `GenericPotential`, or -- when the
 system splits into independent sub-systems -- combine known pieces with
-`SeparablePotential`, which keeps the structure that `physense_qm.spectra`
+`SeparablePotential`, which keeps the structure that `eigora.qm.spectra`
 needs to solve it.
 """
 
-from physense_qm.potentials.known import (
+from eigora.qm.potentials.known import (
     Potential,
     CompositePotential,
     FreeParticle,
@@ -23,9 +23,9 @@ from physense_qm.potentials.known import (
     PotentialStep,
     DoubleWell,
 )
-from physense_qm.potentials.base import PotentialND, SumPotential
-from physense_qm.potentials.generic import GenericPotential
-from physense_qm.potentials.separable import Block1D, SeparablePotential, as_block
+from eigora.qm.potentials.base import PotentialND, SumPotential
+from eigora.qm.potentials.generic import GenericPotential
+from eigora.qm.potentials.separable import Block1D, SeparablePotential, as_block
 
 __all__ = [
     "Potential",

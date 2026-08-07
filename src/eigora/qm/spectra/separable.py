@@ -1,4 +1,4 @@
-# Copyright (C) 2026 Tanguy Marsault - PhySense
+# Copyright (C) 2026 Tanguy Marsault - Eigora
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 """
@@ -16,7 +16,7 @@ from collections.abc import Callable, Sequence
 import numpy as np
 from numpy.typing import NDArray
 
-from physense_qm.spectra.base import Label, Spectrum
+from eigora.qm.spectra.base import Label, Spectrum
 
 
 class SeparableSpectrum(Spectrum):
@@ -28,8 +28,8 @@ class SeparableSpectrum(Spectrum):
 
     Example
     -------
-    >>> from physense_qm.potentials import HarmonicWell, SeparablePotential
-    >>> from physense_qm.spectra import spectrum_for
+    >>> from eigora.qm.potentials import HarmonicWell, SeparablePotential
+    >>> from eigora.qm.spectra import spectrum_for
     >>> sol = spectrum_for(SeparablePotential([HarmonicWell(omega=1.0)] * 3))
     >>> sol.energy((0, 0, 0))
     1.5

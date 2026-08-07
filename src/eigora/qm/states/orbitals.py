@@ -1,11 +1,11 @@
-# Copyright (C) 2026 Tanguy Marsault - PhySense
+# Copyright (C) 2026 Tanguy Marsault - Eigora
 # SPDX-License-Identifier: AGPL-3.0-or-later
 import math
 from dataclasses import dataclass
 import numpy as np
 from scipy.special import eval_genlaguerre
-from physense_utils.spherical_harmonics import spherical_harmonic
-from physense_utils.grids import GridND, to_spherical, map_spherical
+from eigora.spherical_harmonics import spherical_harmonic
+from eigora.grids import GridND, to_spherical, map_spherical
 """
 Atomic orbitals for hydrogen-like atoms, expressed in spherical coordinates (r, theta, phi).
 """
@@ -18,7 +18,7 @@ class SingleAtomState:
 
     Example
     -------
-    >>> from physense_qm import SingleAtomState
+    >>> from eigora.qm import SingleAtomState
     >>> atom = SingleAtomState(Z=1, n=1, l=0, m=0)  # Hydrogen atom
     >>> r = 1.0
     >>> theta = 0.5

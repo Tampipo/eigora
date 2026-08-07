@@ -1,7 +1,7 @@
-# Copyright (C) 2026 Tanguy Marsault - PhySense
+# Copyright (C) 2026 Tanguy Marsault - Eigora
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
-from physense_utils.grids import (
+from eigora.grids import (
     Axis,
     GridND,
     default_axis_names,
@@ -9,10 +9,11 @@ from physense_utils.grids import (
     to_cartesian,
     map_spherical,
 )
-from physense_utils import constants
-from physense_utils.fft import fft1d, ifft1d, fft_frequencies
-from physense_utils.functions import gaussian, sinc, heaviside
-from physense_utils.spherical_harmonics import spherical_harmonic
+from eigora import constants
+from eigora.fft import fft1d, ifft1d, fft_frequencies
+from eigora.functions import gaussian, sinc, heaviside
+from eigora.spherical_harmonics import spherical_harmonic
+from eigora import qm
 
 
 
@@ -31,4 +32,5 @@ __all__ = [
     "heaviside",
     "constants",
     "spherical_harmonic",
+    "qm",
 ]
