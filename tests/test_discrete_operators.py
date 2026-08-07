@@ -1,11 +1,11 @@
-# Copyright (C) 2026 Tanguy Marsault - PhySense
+# Copyright (C) 2026 Tanguy Marsault - Eigora
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 import pytest
 import numpy as np
 from scipy.linalg import expm
 
-from physense_qm.discrete import (
+from eigora.qm.discrete import (
     Hamiltonian,
     Observable,
     Operator,

@@ -3,9 +3,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "physense-qm"
+name = "eigora"
 version = "0.1.0"
-description = "Quantum mechanics simulations for the Physense platform"
+description = "Physics simulations for the Eigora platform"
 license = "AGPL-3.0-or-later"
 license-files = ["LICENSE"]
 authors = [{ name = "Tanguy Marsault" }]
@@ -13,7 +13,6 @@ requires-python = ">=3.12"
 dependencies = [
     "numpy>=2.0",
     "scipy>=1.13",
-    "physense-utils @ git+https://github.com/Tampipo/physense-utils",
 ]
 
 [project.optional-dependencies]
@@ -23,14 +22,11 @@ dev = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/physense_qm"]
-
-[tool.hatch.metadata]
-allow-direct-references = true
+packages = ["src/eigora"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--cov=physense_qm --cov-report=term-missing"
+addopts = "--cov=eigora --cov-report=term-missing"
 
 [tool.coverage.run]
-source = ["src/physense_qm"]
+source = ["src/eigora"]

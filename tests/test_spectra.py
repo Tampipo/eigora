@@ -1,13 +1,13 @@
-# Copyright (C) 2026 Tanguy Marsault - PhySense
+# Copyright (C) 2026 Tanguy Marsault - Eigora
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 import pytest
 import numpy as np
 
-from physense_utils.grids import GridND
+from eigora.grids import GridND
 
-from physense_qm import QuantumSystem, QuantumSystem1D
-from physense_qm.potentials import (
+from eigora.qm import QuantumSystem, QuantumSystem1D
+from eigora.qm.potentials import (
     Block1D,
     DoubleWell,
     GenericPotential,
@@ -15,8 +15,8 @@ from physense_qm.potentials import (
     InfiniteSquareWell,
     SeparablePotential,
 )
-from physense_qm.solvers import solve_eigenstates
-from physense_qm.spectra import (
+from eigora.qm.solvers import solve_eigenstates
+from eigora.qm.spectra import (
     BoxSpectrum,
     HarmonicSpectrum,
     NumericalSpectrum,
@@ -416,7 +416,7 @@ class TestQuantumSystem:
         assert QuantumSystem1D is QuantumSystem
 
     def test_1d_evolve_still_works(self):
-        from physense_qm.states import GaussianWavepacket
+        from eigora.qm.states import GaussianWavepacket
 
         system = QuantumSystem(grid=GRID, potential=HarmonicWell(omega=1.0))
         evolution = system.evolve(GaussianWavepacket(x0=-2.0, k0=0.0, sigma=1.0),
@@ -443,7 +443,7 @@ class TestQuantumSystem:
             system.solve()
 
     def test_evolve_rejects_higher_dimensions(self):
-        from physense_qm.states import GaussianWavepacket
+        from eigora.qm.states import GaussianWavepacket
 
         trap = SeparablePotential([HarmonicWell(omega=1.0)] * 2)
         system = QuantumSystem(grid=GridND.cube(8.0, 64, ndim=2), potential=trap)

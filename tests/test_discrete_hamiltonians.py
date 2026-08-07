@@ -1,4 +1,4 @@
-# Copyright (C) 2026 Tanguy Marsault - PhySense
+# Copyright (C) 2026 Tanguy Marsault - Eigora
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 """
@@ -10,7 +10,7 @@ the analytic eigensystem must agree with `np.linalg.eigh` on the same matrix.
 import pytest
 import numpy as np
 
-from physense_qm.discrete import (
+from eigora.qm.discrete import (
     SX,
     SY,
     SZ,
@@ -201,8 +201,8 @@ class TestHarmonicLadder:
 
     def test_matches_the_continuous_harmonic_well(self):
         """The same spectrum the continuous side reaches by solving an ODE."""
-        from physense_qm.potentials import HarmonicWell
-        from physense_qm.spectra import HarmonicSpectrum
+        from eigora.qm.potentials import HarmonicWell
+        from eigora.qm.spectra import HarmonicSpectrum
 
         omega = 1.3
         exact = HarmonicSpectrum(HarmonicWell(omega=omega))
