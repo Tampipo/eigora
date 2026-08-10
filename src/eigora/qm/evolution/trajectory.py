@@ -58,6 +58,13 @@ class QuantumTrajectory:
     energy : float
         <H> = <p^2>/2 + <V>, evaluated on the first frame. Conserved, so one
         number describes the whole run.
+    boundary_leakage : float
+        Largest fraction of |psi|^2 found in the outer 5% of the grid at any
+        frame. The split-step propagator transforms with an FFT, which makes
+        the box periodic: a packet that reaches one edge reappears at the
+        other, and every expectation value here silently becomes an average
+        over a ring rather than a line. Anything above ~1e-3 means the run
+        needs a wider grid or a shorter t_max before it can be believed.
     """
 
     times: NDArray[np.float64]
@@ -67,6 +74,7 @@ class QuantumTrajectory:
     spread_momentum: NDArray[np.float64]
     uncertainty_product: NDArray[np.float64]
     energy: float
+    boundary_leakage: float
 
 
 def quantum_trajectory(evolution: Evolution) -> QuantumTrajectory:
@@ -90,6 +98,18 @@ def quantum_trajectory(evolution: Evolution) -> QuantumTrajectory:
     spread_x = np.empty(n)
     spread_p = np.empty(n)
 
+    # Outer 5% of the box on each side — the region a well-posed run should
+    # never reach, given the FFT wraps whatever gets there around to the far
+    # side. Watched on every frame, not just the last, since the packet can
+    # cross and come back within a run.
+    x = grid.x
+    span = x[-1] - x[0]
+    # Kept as two separate slices: a single boolean mask over both ends would
+    # make trapezoid bridge the gap and integrate the whole middle of the grid.
+    left = x <= x[0] + 0.05 * span
+    right = x >= x[-1] - 0.05 * span
+    leakage = 0.0
+
     for i in range(n):
         psi = evolution.psi[i]
         x1 = expectation_x(psi, grid)
@@ -100,6 +120,13 @@ def quantum_trajectory(evolution: Evolution) -> QuantumTrajectory:
         mean_p[i] = p1
         spread_x[i] = np.sqrt(max(x2 - x1**2, 0.0))
         spread_p[i] = np.sqrt(max(p2 - p1**2, 0.0))
+
+        density = np.abs(psi) ** 2
+        at_edges = float(
+            np.trapezoid(density[left], x[left])
+            + np.trapezoid(density[right], x[right])
+        )
+        leakage = max(leakage, at_edges)
 
     psi0 = evolution.psi[0]
     v_mean = float(
@@ -115,6 +142,7 @@ def quantum_trajectory(evolution: Evolution) -> QuantumTrajectory:
         spread_momentum=spread_p,
         uncertainty_product=spread_x * spread_p,
         energy=energy,
+        boundary_leakage=leakage,
     )
 
 
@@ -132,6 +160,15 @@ def classical_trajectory(
     the requested times. The force is taken as a central difference of V, so
     this works for any potential the library can evaluate, not just the ones
     with an analytic derivative.
+
+    Smooth potentials only. A central difference cannot see a step
+    discontinuity -- across an infinite wall it reports zero force and the
+    particle sails straight through -- so callers must not use this for the
+    square well, barrier or step. Detecting the wall by energy instead and
+    reflecting off it was tried and rejected: it fires spuriously at ordinary
+    smooth turning points, where the discrete step overshoots V = E by O(dt^2),
+    and cost a factor of 30 in accuracy on the harmonic oscillator to fix a
+    case the caller can simply decline to ask for.
 
     Parameters
     ----------

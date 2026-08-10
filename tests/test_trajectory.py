@@ -4,7 +4,7 @@
 import pytest
 import numpy as np
 from eigora.grids import GridND
-from eigora.qm.potentials import DoubleWell, HarmonicWell, RectangularBarrier
+from eigora.qm.potentials import DoubleWell, FreeParticle, HarmonicWell, RectangularBarrier
 from eigora.qm.states.wavepacket import GaussianWavepacket
 from eigora.qm.evolution import (
     classical_trajectory,
@@ -113,6 +113,37 @@ class TestQuantumTrajectory:
         assert traj.mean_position.shape == (37,)
         assert traj.uncertainty_product.shape == (37,)
         assert np.all(traj.uncertainty_product >= 0.5 - 1e-6)
+
+
+class TestBoundaryLeakage:
+    """
+    The propagator FFTs, so the box is periodic: whatever leaves one edge
+    comes back in at the other, and <x> quietly becomes an average over a
+    ring. `boundary_leakage` is what lets a caller notice.
+    """
+
+    def test_confined_packet_reports_no_leakage(self, grid, well):
+        traj = run(grid, well, GaussianWavepacket(x0=2.5, k0=0.0, sigma=well.coherent_width))
+        assert traj.boundary_leakage < 1e-9
+
+    def test_packet_driven_into_the_edge_is_flagged(self, grid):
+        """A free packet crosses the boundary and wraps — leakage catches it."""
+        traj = run(grid, FreeParticle(), GaussianWavepacket(x0=0.0, k0=3.0, sigma=0.8), t_max=8.0)
+        assert traj.boundary_leakage > 0.1
+
+    def test_leakage_coincides_with_mean_position_going_wrong(self, grid):
+        """Sanity-check that the flag fires on a genuinely corrupted run."""
+        packet = GaussianWavepacket(x0=0.0, k0=3.0, sigma=0.8)
+        traj = run(grid, FreeParticle(), packet, t_max=8.0)
+
+        # Free motion should be <x> = k0 * t, rising without bound. Instead it
+        # turns over, because probability is re-entering from the far side.
+        assert traj.mean_position.max() < 3.0 * traj.times[-1]
+        assert traj.boundary_leakage > 0.1
+
+    def test_never_exceeds_one(self, grid, well):
+        traj = run(grid, well, GaussianWavepacket(x0=1.0, k0=0.0, sigma=0.5))
+        assert 0.0 <= traj.boundary_leakage <= 1.0
 
 
 class TestAnharmonicIsWhereTheHarmonicMagicStops:
