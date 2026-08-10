@@ -56,6 +56,22 @@ class HarmonicWell(Potential):
     def __call__(self, x: NDArray[np.float64]) -> NDArray[np.float64]:
         return 0.5 * self.omega**2 * (x - self.x0) ** 2
 
+    @property
+    def coherent_width(self) -> float:
+        """
+        Gaussian width sqrt(hbar / (2 m omega)) = 1/sqrt(2 omega).
+
+        This is the ground-state width. A Gaussian prepared at this sigma and
+        displaced is a *coherent state*: it oscillates without changing shape,
+        because it is the ground state translated. Any other width breathes.
+
+        The property lives here, and not with the general trajectory tools,
+        because it has no analogue in an anharmonic potential: shape-invariant
+        packets exist only when the levels are evenly spaced, which is what
+        E_n = omega (n + 1/2) provides and a generic V(x) does not.
+        """
+        return float(1.0 / np.sqrt(2.0 * self.omega))
+
 
 class InfiniteSquareWell(Potential):
     """
