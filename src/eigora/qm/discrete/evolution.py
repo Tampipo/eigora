@@ -17,6 +17,7 @@ times may be unevenly spaced, out of order, or negative.
 """
 
 from dataclasses import dataclass
+from functools import cached_property
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
@@ -58,6 +59,51 @@ class Evolution:
         if n < 0 or n >= self.n_times:
             raise IndexError(f"Time index {n} out of range [0, {self.n_times - 1}]")
         return self.psi[n]
+
+    @cached_property
+    def coefficients(self) -> Matrix:
+        """
+        c_n(t) = <E_n|psi(t)>, the amplitude on each energy eigenstate.
+
+        Shape (n_times, dim), the columns ordered by ascending energy. This is
+        `psi` read in the energy eigenbasis rather than the computational one
+        -- the same evolution, in the basis the Schrodinger equation is
+        diagonal in:
+
+            c_n(t) = c_n(0) exp(-i E_n t)
+
+        so only the phase of each entry ever moves. Every |c_n| is fixed by
+        psi(0) and conserved, which is what makes the energy distribution of a
+        state a constant of the motion.
+        """
+        # <E_n|psi_t> = sum_j conj(V[n][j]) psi_t[j], for eigenvectors stored
+        # one per row and states stored one per row.
+        return self.psi @ self.hamiltonian.eigenvectors().conj().T
+
+    def overlap(self, phi: Matrix) -> NDArray[np.complex128]:
+        """
+        <phi|psi(t)> at every requested time.
+
+        The transition amplitude onto a fixed state: |<phi|psi(t)>|^2 is the
+        probability of finding the system in `phi`, and the argument carries
+        the relative phase that a probability throws away.
+
+        Parameters
+        ----------
+        phi : Matrix of shape (dim,)
+            The state to project onto, in the computational basis. Taken as
+            given -- an unnormalised `phi` scales the amplitude with it.
+
+        Returns
+        -------
+        NDArray of shape (n_times,), complex
+        """
+        phi = np.asarray(phi, dtype=complex)
+        if phi.shape != (self.dim,):
+            raise ValueError(
+                f"phi must have shape ({self.dim},), got {phi.shape}"
+            )
+        return self.psi @ phi.conj()
 
     def probabilities(self, n: int) -> NDArray[np.float64]:
         """
