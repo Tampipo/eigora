@@ -142,3 +142,100 @@ class TestEvolutionResult:
     def test_state_index_out_of_range(self, evolution, index):
         with pytest.raises(IndexError):
             evolution.state(index)
+
+
+class TestCoefficients:
+    """c_n(t) = <E_n|psi(t)>, the state read in the energy eigenbasis."""
+
+    @pytest.fixture
+    def ladder(self):
+        """Already diagonal, so the computational basis is the eigenbasis."""
+        return Hamiltonian(np.diag([0.5, 1.5, 2.5, 3.5, 4.5]))
+
+    @pytest.fixture
+    def spread(self, ladder):
+        """An even superposition of all five levels."""
+        psi0 = np.ones(ladder.dim) / np.sqrt(ladder.dim)
+        return evolve(ladder, psi0, np.linspace(0.0, 4 * np.pi, 64))
+
+    def test_shape(self, spread):
+        assert spread.coefficients.shape == (64, 5)
+
+    def test_only_the_phase_moves(self, spread):
+        """|c_n| is fixed by psi(0): H commutes with itself."""
+        moduli = np.abs(spread.coefficients)
+        assert np.allclose(moduli, 1 / np.sqrt(5))
+
+    def test_each_turns_at_its_own_energy(self, spread, ladder):
+        """c_n(t) = c_n(0) exp(-i E_n t), one frequency per level."""
+        expected = spread.coefficients[0] * np.exp(
+            -1j * np.outer(spread.times, ladder.eigenenergies())
+        )
+        assert np.allclose(spread.coefficients, expected)
+
+    def test_diagonal_hamiltonian_leaves_the_state_unchanged(self, spread):
+        """Nothing to rotate when the basis is already the eigenbasis."""
+        assert np.allclose(spread.coefficients, spread.psi)
+
+    def test_rotated_hamiltonian_is_not_the_computational_basis(
+        self, random_hamiltonian, random_state
+    ):
+        evolution = evolve(random_hamiltonian, random_state, [0.0, 2.5])
+        assert not np.allclose(evolution.coefficients, evolution.psi)
+        # ...but the two bases are related by the eigenvectors, and both are
+        # normalised, so no probability is created or lost by the change.
+        assert np.sum(np.abs(evolution.coefficients[1]) ** 2) == pytest.approx(1.0)
+
+    def test_agrees_with_projecting_state_by_state(
+        self, random_hamiltonian, random_state
+    ):
+        evolution = evolve(random_hamiltonian, random_state, [0.0, 1.3, 7.0])
+        for n, eigenvector in enumerate(random_hamiltonian.eigenvectors()):
+            assert np.allclose(
+                evolution.coefficients[:, n],
+                [np.vdot(eigenvector, evolution.state(i)) for i in range(3)],
+            )
+
+    def test_eigenstate_has_a_single_coefficient(self, random_hamiltonian):
+        state = random_hamiltonian.eigenvectors()[3]
+        coefficients = evolve(random_hamiltonian, state, [0.0, 6.0]).coefficients
+        assert np.allclose(np.abs(coefficients[:, 3]), 1.0)
+        assert np.allclose(np.delete(np.abs(coefficients), 3, axis=1), 0.0)
+
+
+class TestOverlap:
+    @pytest.fixture
+    def evolution(self, random_hamiltonian, random_state):
+        return evolve(random_hamiltonian, random_state, np.linspace(0.0, 8.0, 40))
+
+    def test_shape(self, evolution):
+        assert evolution.overlap(np.eye(16)[0]).shape == (40,)
+
+    def test_with_an_eigenstate_is_that_coefficient(
+        self, evolution, random_hamiltonian
+    ):
+        for n in (0, 7, 15):
+            assert np.allclose(
+                evolution.overlap(random_hamiltonian.eigenvectors()[n]),
+                evolution.coefficients[:, n],
+            )
+
+    def test_with_itself_at_t_zero_is_one(self, evolution, random_state):
+        assert evolution.overlap(random_state)[0] == pytest.approx(1.0)
+
+    def test_squared_modulus_is_a_probability(self, evolution):
+        probabilities = np.abs(evolution.overlap(np.eye(16)[5])) ** 2
+        assert np.allclose(probabilities, evolution.psi[:, 5].real**2 + evolution.psi[:, 5].imag**2)
+        assert np.all(probabilities <= 1.0 + 1e-12)
+
+    def test_is_conjugate_linear_in_phi(self, evolution):
+        phi = np.eye(16)[2]
+        assert np.allclose(evolution.overlap(1j * phi), -1j * evolution.overlap(phi))
+
+    def test_unnormalised_reference_scales_the_amplitude(self, evolution):
+        phi = np.eye(16)[4]
+        assert np.allclose(evolution.overlap(3 * phi), 3 * evolution.overlap(phi))
+
+    def test_rejects_mismatched_dimension(self, evolution):
+        with pytest.raises(ValueError, match=r"shape \(16,\)"):
+            evolution.overlap(np.ones(3))
