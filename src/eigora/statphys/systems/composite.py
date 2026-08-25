@@ -68,8 +68,17 @@ class CompositeSystem(System):
     def is_exact(self) -> bool:
         return all(block.is_exact for block in self.blocks)
 
+    @property
+    def extensive_variables(self) -> frozenset[str]:
+        """The union over blocks: the composite can report whatever any of them can."""
+        return frozenset().union(
+            *(block.extensive_variables for block in self.blocks)
+        )
+
     def log_z(self, beta: float, couplings: Couplings = ()) -> float:
-        return sum(block.log_z(beta, couplings) for block in self.blocks)
+        return sum(
+            block.log_z(beta, _carried_by(block, couplings)) for block in self.blocks
+        )
 
     def moments(self, beta: float, couplings: Couplings = ()) -> Moments:
         """
@@ -80,19 +89,42 @@ class CompositeSystem(System):
         so do all the first and second cumulants -- which is also why the heat
         capacity is extensive. A magnet of N spins therefore costs N partition
         functions, not one sum over 2^N states.
+
+        Each block is handed only the couplings its own microstates can report.
+        A block carrying no magnetisation is not an error in a magnetic
+        ensemble -- it contributes zero to `<M>` and to `Var(M)`, which is
+        exactly what a spin glued to a two-level means. Handing every coupling
+        to every block would refuse `Spin(1.5) * TwoLevel(1.0)` in a field, a
+        system with nothing wrong with it.
         """
         couplings = tuple(couplings)
-        parts = [block.moments(beta, couplings) for block in self.blocks]
+        self._check_couplings(couplings)
         names = tuple(name for name, _ in couplings)
+        parts = [
+            block.moments(beta, _carried_by(block, couplings))
+            for block in self.blocks
+        ]
         return Moments(
             log_z=sum(part.log_z for part in parts),
             energy=sum(part.energy for part in parts),
             energy_variance=sum(part.energy_variance for part in parts),
-            means={name: sum(part.means[name] for part in parts) for name in names},
+            means={
+                name: sum(part.means.get(name, 0.0) for part in parts)
+                for name in names
+            },
             variances={
-                name: sum(part.variances[name] for part in parts) for name in names
+                name: sum(part.variances.get(name, 0.0) for part in parts)
+                for name in names
             },
         )
+
+
+def _carried_by(block: System, couplings: Couplings) -> Couplings:
+    """The subset of `couplings` whose variables this block's microstates report."""
+    if not couplings:
+        return ()
+    carried = block.extensive_variables
+    return tuple((name, value) for name, value in couplings if name in carried)
 
 
 __all__ = ["CompositeSystem"]

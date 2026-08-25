@@ -43,14 +43,13 @@ from eigora.statphys.systems import (
     TwoLevel,
     particle_in_box,
 )
+from eigora.statphys.state import ThermalState, equilibrium
 from eigora.statphys.ensembles import (
     Canonical,
     Ensemble,
     Field,
     Generalised,
     Magnetic,
-    ThermalState,
-    equilibrium,
 )
 
 __all__ = [

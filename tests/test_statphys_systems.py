@@ -27,6 +27,7 @@ from eigora.statphys import (
     Spin,
     System,
     TwoLevel,
+    equilibrium,
     particle_in_box,
 )
 from eigora.statphys.ensembles import Canonical, Magnetic
@@ -319,8 +320,117 @@ class TestSummation:
 
     def test_non_spectral_systems_refuse_freed_variables(self):
         composite = TwoLevel(1.0) * TwoLevel(2.0)
-        with pytest.raises(ValueError, match="magnetisation"):
+        with pytest.raises(ValueError, match="cannot be summed against"):
             composite.moments(1.0, magnetic(0.5))
+
+
+class TestVocabulary:
+    """
+    A system says what its microstates carry; an ensemble frees a subset.
+    """
+
+    @pytest.mark.parametrize(
+        "system, expected",
+        [
+            (TwoLevel(1.0), set()),
+            (HarmonicMode(1.0), set()),
+            (Spin(0.5), {"magnetisation"}),
+            (Spin(0.5) * TwoLevel(1.0), {"magnetisation"}),
+            (TwoLevel(1.0) * Rotor(1.0), set()),
+            (Spin(0.5) ** 3, {"magnetisation"}),
+        ],
+    )
+    def test_extensive_variables(self, system, expected):
+        assert system.extensive_variables == expected
+
+    def test_a_composite_routes_couplings_to_the_blocks_that_carry_them(self):
+        """
+        `Spin * TwoLevel` in a field: the two-level contributes zero
+        magnetisation rather than refusing, and zero magnetisation is the
+        physically right contribution -- its microstates have none.
+        """
+        block = Spin(1.5) * TwoLevel(1.0)
+        beta, field = 1.0 / 0.7, 0.6
+        mixed = block.moments(beta, magnetic(field))
+        spin_only = Spin(1.5).moments(beta, magnetic(field))
+        gap_only = TwoLevel(1.0).moments(beta)
+
+        assert mixed.means["magnetisation"] == pytest.approx(
+            spin_only.means["magnetisation"]
+        )
+        assert mixed.variances["magnetisation"] == pytest.approx(
+            spin_only.variances["magnetisation"]
+        )
+        # The energy comes entirely from the block that has one.
+        assert mixed.energy == pytest.approx(gap_only.energy)
+        assert mixed.energy_variance == pytest.approx(gap_only.energy_variance)
+        assert mixed.log_z == pytest.approx(spin_only.log_z + gap_only.log_z)
+
+    def test_order_within_a_composite_does_not_matter(self):
+        beta, couplings = 1.3, magnetic(0.4)
+        one = (Spin(0.5) * TwoLevel(1.0)).moments(beta, couplings)
+        other = (TwoLevel(1.0) * Spin(0.5)).moments(beta, couplings)
+        assert one.log_z == pytest.approx(other.log_z)
+        assert one.means["magnetisation"] == pytest.approx(other.means["magnetisation"])
+
+    def test_a_system_refuses_a_coupling_it_cannot_report(self):
+        with pytest.raises(ValueError, match="carries nothing"):
+            TwoLevel(1.0).moments(1.0, magnetic(0.5))
+
+    def test_a_spectrum_that_disagrees_with_itself_is_caught(self):
+        """
+        The one case the declaration cannot catch, since it trusts level 0.
+
+        `extensive_variables` reads the first level, so a system whose later
+        levels drop a variable passes every check upstream -- the ensemble is
+        accepted, the couplings are accepted -- and only the sweep can see it.
+        Without this guard the missing levels would be averaged as zero and
+        <M> would come out quietly wrong.
+        """
+
+        class Forgetful(SpectralSystem):
+            @property
+            def is_exact(self):
+                return True
+
+            @property
+            def n_states(self):
+                return 3
+
+            def levels(self):
+                yield Level(0.0, 1, {"magnetisation": 1.0})
+                yield Level(1.0, 1, {"magnetisation": -1.0})
+                yield Level(2.0, 1)  # forgot it
+
+        system = Forgetful()
+        # It looks perfectly usable from the outside.
+        assert system.extensive_variables == {"magnetisation"}
+        state = equilibrium(system, Magnetic(1.0, 0.5))
+        with pytest.raises(ValueError, match="level 2 of Forgetful"):
+            state.magnetisation
+
+    def test_a_homogeneous_spectrum_is_not_refused(self):
+        # The mirror of the above: every level reporting it is fine.
+        state = equilibrium(Spin(1.0), Magnetic(1.0, 0.5))
+        assert state.magnetisation == pytest.approx(
+            state.mean("magnetisation")
+        )
+
+    def test_the_canonical_path_never_asks_for_the_vocabulary(self, monkeypatch):
+        """
+        `extensive_variables` walks to the first level, so a canonical sum
+        must not touch it -- otherwise every sweep pays for a question with
+        no couplings to answer.
+        """
+        system = TwoLevel(1.0)
+
+        def forbidden(self):
+            raise AssertionError("extensive_variables consulted on a canonical sum")
+
+        monkeypatch.setattr(type(system), "extensive_variables", property(forbidden))
+        assert system.moments(1.0).log_z == pytest.approx(
+            math.log(1.0 + math.exp(-1.0))
+        )
 
 
 class TestExactVersusNumerical:
@@ -390,3 +500,98 @@ class TestExactVersusNumerical:
         for system in (Degenerate(3), HarmonicMode(1.0)):
             with pytest.raises(ValueError, match="beta must be positive"):
                 system.log_z(-1.0)
+
+
+class TestGuards:
+    """
+    The refusals. Each is one line in the source and none is reached by the
+    physics tests, so without these they are only assertions that something
+    *ought* to fail -- untested guards are how a wrong exception type or an
+    unreachable branch survives.
+    """
+
+    def test_level_rejects_a_non_finite_extensive_value(self):
+        with pytest.raises(ValueError, match="must be finite"):
+            Level(0.0, 1, {"magnetisation": float("nan")})
+
+    def test_beta_must_be_finite(self):
+        with pytest.raises(ValueError, match="beta must be finite"):
+            TwoLevel(1.0).moments(float("inf"))
+
+    def test_an_empty_spectrum_is_refused(self):
+        class Nothing(SpectralSystem):
+            @property
+            def is_exact(self):
+                return True
+
+            @property
+            def n_states(self):
+                return 0
+
+            def levels(self):
+                return iter(())
+
+        with pytest.raises(ValueError, match="no levels to sum over"):
+            Nothing().moments(1.0)
+
+    def test_a_plain_system_carries_nothing_by_default(self):
+        """The `System` default, which every catalogue entry overrides."""
+
+        class Opaque(System):
+            @property
+            def is_exact(self):
+                return True
+
+            def log_z(self, beta, couplings=()):
+                return -beta
+
+        assert Opaque().extensive_variables == frozenset()
+
+    def test_harmonic_mode_refuses_couplings_directly(self):
+        # Unreachable through `equilibrium`, which refuses at the join first.
+        with pytest.raises(ValueError, match="carries no extensive variable"):
+            HarmonicMode(1.0).moments(1.0, magnetic(0.5))
+
+    def test_harmonic_mode_guards_beta(self):
+        with pytest.raises(ValueError, match="beta must be positive"):
+            HarmonicMode(1.0).moments(0.0)
+
+    @pytest.mark.parametrize(
+        "build, message",
+        [
+            (lambda: NLevel([0.0, 1.0], [1, 0]), "degeneracies must be at least 1"),
+            (lambda: Degenerate(0), "degeneracy must be at least 1"),
+            (lambda: Spin(-1.0), "j must be non-negative"),
+            (lambda: Box1D(length=0.0), "length must be positive"),
+            (lambda: Box1D(length=1.0, mass=-1.0), "mass must be positive"),
+            (lambda: CompositeSystem([]), "at least one block"),
+        ],
+    )
+    def test_construction_guards(self, build, message):
+        with pytest.raises(ValueError, match=message):
+            build()
+
+    def test_multiplying_by_a_non_system_is_a_type_error(self):
+        with pytest.raises(TypeError):
+            TwoLevel(1.0) * 3
+
+    def test_raising_to_a_non_integer_power_is_a_type_error(self):
+        with pytest.raises(TypeError):
+            TwoLevel(1.0) ** 2.5
+
+    @pytest.mark.parametrize(
+        "system, expected",
+        [
+            (Degenerate(4), 4),
+            (Rotor(1.0), None),
+            (Box1D(1.0), None),
+            (TwoLevel(1.0), 2),
+        ],
+    )
+    def test_n_states(self, system, expected):
+        assert system.n_states == expected
+
+    def test_ground_level(self):
+        system = NLevel([0.5, 2.0], [3, 1])
+        assert system.ground_energy == pytest.approx(0.5)
+        assert system.ground_degeneracy == 3

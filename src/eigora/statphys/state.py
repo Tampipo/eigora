@@ -10,6 +10,12 @@ exists. Keeping them apart until here is deliberate -- the same system can be
 studied in several ensembles, and comparing them is most of what equilibrium
 statistical mechanics is for.
 
+This module sits above both halves rather than inside either, because it
+belongs to neither and because an ensemble has more than one consumer: summed
+over a spectrum it gives the thermodynamics here, and compared across a
+proposed move it will give the Metropolis acceptance rule in
+`statphys.monte_carlo`.
+
 Every quantity is a moment of the ensemble weight or a derivative of log Z, so
 three generic methods cover them all:
 
@@ -33,7 +39,7 @@ from functools import cached_property
 
 from scipy.optimize import brentq
 
-from eigora.statphys.ensembles.base import Ensemble
+from eigora.statphys.ensembles import Ensemble
 from eigora.statphys.systems.base import Moments, System
 
 # How far `field_for` will push a bracket outward before giving up.
@@ -64,6 +70,27 @@ class ThermalState:
 
     system: System
     ensemble: Ensemble
+
+    def __post_init__(self) -> None:
+        """
+        Refuse an ensemble that frees something the system cannot report.
+
+        The system owns the vocabulary: what its microstates carry is what can
+        be asked of it, and an ensemble may free any subset of that -- freeing
+        nothing, the canonical case, is always allowed. Checking here rather
+        than inside the sweep means the error names the two objects the caller
+        actually wrote, instead of surfacing as a complaint about level 0 of
+        some block they never mentioned.
+        """
+        missing = sorted(set(self.ensemble.free) - self.system.extensive_variables)
+        if missing:
+            carried = ", ".join(sorted(self.system.extensive_variables)) or "nothing"
+            raise ValueError(
+                f"{type(self.ensemble).__name__} frees {missing}, but "
+                f"{type(self.system).__name__} carries {carried}; a system can "
+                f"only be put in an ensemble that frees variables its "
+                f"microstates report"
+            )
 
     # -- the single sweep everything else reads ---------------------------
 

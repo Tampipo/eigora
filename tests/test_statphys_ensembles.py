@@ -19,6 +19,7 @@ import pytest
 
 from eigora.statphys import (
     Canonical,
+    Ensemble,
     Degenerate,
     Field,
     Generalised,
@@ -347,14 +348,12 @@ class TestNegativeSignField:
         )
         assert state.entropy == pytest.approx(expected)
 
-    def test_a_system_without_the_variable_is_refused(self, ensemble):
-        with pytest.raises(ValueError, match="carries no extensive variable"):
-            equilibrium(HarmonicMode(1.0), ensemble).mean("volume")
-
-    def test_a_spectral_system_without_the_variable_is_refused(self, ensemble):
-        # The same refusal from the sweep rather than from a closed form.
-        with pytest.raises(ValueError, match="does not carry it"):
-            equilibrium(TwoLevel(1.0), ensemble).mean("volume")
+    @pytest.mark.parametrize("system", [HarmonicMode(1.0), TwoLevel(1.0)])
+    def test_a_system_without_the_variable_is_refused(self, ensemble, system):
+        # Refused where the two are joined, not deep inside a sweep, and
+        # before any levels are touched.
+        with pytest.raises(ValueError, match="frees \\['volume'\\]"):
+            equilibrium(system, ensemble)
 
 
 class TestEquilibrium:
@@ -384,3 +383,35 @@ class TestEquilibrium:
             equilibrium(rotor, base.at(temperature=t)).energy for t in (1.0, 10.0, 100.0)
         ]
         assert energies == sorted(energies)
+
+
+class TestGuards:
+    """The ensemble and state refusals, none of which the physics tests reach."""
+
+    def test_temperature_must_be_finite(self):
+        with pytest.raises(ValueError, match="temperature must be finite"):
+            Canonical(temperature=math.inf)
+
+    def test_field_for_rejects_a_non_finite_target(self):
+        state = equilibrium(Spin(0.5), Magnetic(1.0, 0.0))
+        with pytest.raises(ValueError, match="target must be finite"):
+            state.field_for("magnetisation", math.inf)
+
+    def test_generalised_rejects_a_non_field(self):
+        with pytest.raises(TypeError, match="expected a Field"):
+            Generalised(1.0, ["magnetisation"])
+
+    def test_with_field_needs_the_parameter_to_be_declared(self):
+        """
+        `with_field` is named for the physics, so it needs the map from
+        variable to constructor parameter. An ensemble that frees something
+        without declaring where the field lives cannot be re-valued.
+        """
+
+        class Undeclared(Ensemble):
+            @property
+            def fields(self):
+                return (Field("magnetisation", 0.5, +1, "h"),)
+
+        with pytest.raises(ValueError, match="does not say which parameter"):
+            Undeclared(temperature=1.0).with_field("magnetisation", 2.0)

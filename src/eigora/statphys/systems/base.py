@@ -13,13 +13,23 @@ continuum limit, N identical particles. Making the level stream the primitive
 would force those three to enumerate something combinatorial to satisfy an
 interface they do not need.
 
-Three layers, each adding one guarantee the one below cannot make -- the same
-shape as `Operator` / `Observable` / `Hamiltonian` in `eigora.qm.discrete`:
+`System` has **two independent refinements**, not a chain -- being enumerable
+and having dials are unrelated capabilities, and a system may have either,
+both or neither:
 
-    System             a partition function, and derivatives of it
-    SpectralSystem     the levels can be enumerated, so moments are exact
-    ParametrisedSystem extensive parameters can be varied, so their
-                       conjugates (pressure, chemical potential) exist
+    System              a partition function, and derivatives of it
+      SpectralSystem    the levels can be enumerated, so moments are exact
+      ParametrisedSystem extensive parameters can be varied, so their
+                        conjugates (pressure, chemical potential) exist
+
+Both are combined by ordinary multiple inheritance where a system is both:
+`class ClosedTrap(SpectralSystem, ParametrisedSystem)`. `SpectralSystem`
+alone is the closest analogue of the `Operator` / `Observable` / `Hamiltonian`
+ladder in `eigora.qm.discrete`.
+
+A system also owns the **vocabulary**: `extensive_variables` says what its
+microstates carry beyond their energy, and an ensemble may free any subset of
+that. The check happens once, in `statphys.state`, where the two are joined.
 
 A `Level` carries an energy, a degeneracy, and optionally the other extensive
 quantities its microstates hold -- a magnetisation, a particle number. Those
@@ -170,6 +180,22 @@ class System(ABC):
     def is_exact(self) -> bool:
         """True if the partition function is analytic rather than truncated."""
 
+    @property
+    def extensive_variables(self) -> frozenset[str]:
+        """
+        Which extensive quantities this system's microstates carry.
+
+        Everything but the energy, which every microstate has by definition.
+        A system can only be put in an ensemble that frees a subset of these,
+        and a composite routes each coupling to the blocks that report it --
+        so a spin attached to a two-level still has a magnetisation, with the
+        two-level contributing zero to it rather than refusing.
+
+        Empty by default, which is right for a system whose only extensive
+        quantity is its energy. `SpectralSystem` reads it off the levels.
+        """
+        return frozenset()
+
     # -- derived ----------------------------------------------------------
 
     def moments(self, beta: float, couplings: Couplings = ()) -> Moments:
@@ -208,6 +234,7 @@ class System(ABC):
         """
         _check_beta(beta)
         couplings = tuple(couplings)
+        self._check_couplings(couplings)
         centre = self.log_z(beta, couplings)
 
         step = _FIRST_STEP * beta
@@ -266,6 +293,24 @@ class System(ABC):
         """`log_z` at a shifted beta, holding every `beta * c_i` fixed."""
         moved = beta + offset
         return self.log_z(moved, _rescaled(couplings, beta / moved))
+
+    def _check_couplings(self, couplings: Couplings) -> None:
+        """
+        Refuse couplings for variables this system's microstates never report.
+
+        Guarded on `couplings` being non-empty so the canonical path costs
+        nothing: `extensive_variables` walks to the first level, and a system
+        summed with no couplings should not pay for a question nobody asked.
+        """
+        if not couplings:
+            return
+        missing = sorted({name for name, _ in couplings} - self.extensive_variables)
+        if missing:
+            carried = ", ".join(sorted(self.extensive_variables)) or "nothing"
+            raise ValueError(
+                f"{type(self).__name__} carries {carried}, so it cannot be "
+                f"summed against {missing}"
+            )
 
     # -- composition ------------------------------------------------------
 
@@ -328,6 +373,18 @@ class SpectralSystem(System):
         return True
 
     @property
+    def extensive_variables(self) -> frozenset[str]:
+        """
+        Read off the first level, since every level must carry the same set.
+
+        That requirement is not new: the sweep already refuses a spectrum in
+        which some level omits a variable the ensemble freed, because there is
+        no honest way to average a quantity that only some microstates report.
+        Given that, the first level speaks for all of them.
+        """
+        return frozenset(next(iter(self.levels())).extensive)
+
+    @property
     def ground_energy(self) -> float:
         """Energy of the lowest level."""
         return next(iter(self.levels())).energy
@@ -350,7 +407,9 @@ class SpectralSystem(System):
         by differentiating log Z with respect to its field. That makes this the
         reference the finite-difference route in `System` is checked against.
         """
-        return self._sweep(beta, tuple(couplings), tol)
+        couplings = tuple(couplings)
+        self._check_couplings(couplings)
+        return self._sweep(beta, couplings, tol)
 
     def log_z(self, beta: float, couplings: Couplings = (), tol: float = _TOL) -> float:
         """
@@ -482,14 +541,23 @@ class SpectralSystem(System):
     def _require_extensive(
         self, level: Level, names: tuple[str, ...], index: int
     ) -> None:
-        """Fail loudly rather than silently averaging a missing variable as zero."""
+        """
+        Fail loudly rather than silently averaging a missing variable as zero.
+
+        This is what makes `extensive_variables` trustworthy. That property is
+        read off the first level and everything upstream believes it, so the
+        one thing it cannot catch is a spectrum that disagrees with itself --
+        level 0 reporting a magnetisation and level 7 forgetting it. There is
+        no honest average over a quantity only some microstates carry, so the
+        sweep checks every level rather than assuming the first spoke for all.
+        """
         missing = [name for name in names if name not in level.extensive]
         if missing:
             them = "it" if len(missing) == 1 else "them"
             raise ValueError(
-                f"the ensemble frees {missing}, but level {index} of "
-                f"{type(self).__name__} does not carry {them}; a system only "
-                f"works in an ensemble whose freed variables its levels report"
+                f"level {index} of {type(self).__name__} does not carry "
+                f"{missing}, but level 0 does; every level must report the "
+                f"same extensive variables, or {them} cannot be averaged"
             )
 
 
