@@ -45,6 +45,11 @@ from eigora.statphys.systems.base import Moments, System
 # How far `field_for` will push a bracket outward before giving up.
 _MAX_BRACKET_STEPS = 60
 
+# Relative step for differentiating log Z with respect to a continuous system
+# parameter. Coarser than the beta steps because each evaluation rebuilds the
+# system, so the usual eps^(1/3) tuning is not the binding constraint.
+_PARAMETER_STEP = 1e-6
+
 
 @dataclass(frozen=True)
 class ThermalState:
@@ -241,6 +246,65 @@ class ThermalState:
         """chi = d<M>/dh = beta Var(M)."""
         return self.response("magnetisation")
 
+    # -- conjugates of fixed parameters -----------------------------------
+
+    @property
+    def pressure(self) -> float:
+        """
+        P = (1/beta) dlogZ/dV, at fixed temperature and particle number.
+
+        Two honest routes, and which one applies is decided by the ensemble
+        rather than by a flag. If the volume is *free* the pressure is an
+        input, and this returns the field that was set. If the volume is a
+        fixed system parameter the pressure is an output, obtained by
+        rebuilding the system at `V +- h` and differencing -- `at` changes
+        which microstates exist, so this genuinely costs two more partition
+        functions rather than re-reading one sweep.
+        """
+        if self.ensemble.has_field("volume"):
+            return self.ensemble.field("volume").value
+        return self._parameter_slope("volume", "pressure") / self.beta
+
+    @property
+    def chemical_potential(self) -> float:
+        """
+        mu = F(N) - F(N-1), the free-energy cost of one more particle.
+
+        Exact rather than approximate: particle number is discrete, so a step
+        of one *is* the derivative and there is no step size to choose. That
+        is what `ParametrisedSystem.DISCRETE_PARAMETERS` marks.
+
+        As with `pressure`, a grand canonical ensemble makes mu an input and
+        this returns it -- the two routes are conjugate, and holding them
+        against each other is the sharpest check available on either.
+        """
+        if self.ensemble.has_field("particles"):
+            return self.ensemble.field("particles").value
+        count = self._parameter("particles", "chemical_potential")
+        if count < 1.0:
+            raise ValueError(
+                f"chemical_potential needs at least one particle to remove, "
+                f"got {count:g}"
+            )
+        fewer = self._rebuilt(particles=count - 1.0)
+        return self.potential - fewer.potential
+
+    @property
+    def enthalpy(self) -> float:
+        """
+        H = <E> + P<V>.
+
+        Derived, never generating. `H` is the potential at fixed (S, P) and no
+        simple ensemble samples at fixed entropy -- the (T, P, N) ensemble
+        generates the Gibbs energy `G = H - TS`. So this is computed from a
+        state rather than read off one, and it is not among the aliases of
+        `potential`.
+        """
+        if self.ensemble.has_field("volume"):
+            return self.energy + self.pressure * self.mean("volume")
+        volume = self._parameter("volume", "enthalpy")
+        return self.energy + self.pressure * volume
+
     def field_for(self, variable: str, target: float) -> float:
         """
         The field value that makes `<X>` equal `target`.
@@ -300,6 +364,38 @@ class ThermalState:
         return float(brentq(residual, low, high))
 
     # -- helpers ----------------------------------------------------------
+
+    def _parameter(self, name: str, where: str) -> float:
+        """The value of a fixed system parameter, or a message saying why not."""
+        parameters = getattr(self.system, "parameters", None)
+        if parameters is None or name not in parameters:
+            held = ", ".join(sorted(parameters or {})) or "none"
+            raise ValueError(
+                f"{where} needs '{name}' among the parameters of "
+                f"{type(self.system).__name__}, which has {held}"
+            )
+        return parameters[name]
+
+    def _rebuilt(self, **changes: float) -> "ThermalState":
+        """The same ensemble applied to the system rebuilt at other parameters."""
+        return type(self)(self.system.at(**changes), self.ensemble)
+
+    def _parameter_slope(self, name: str, where: str) -> float:
+        """
+        dlogZ/d(parameter), by central difference on a rebuilt system.
+
+        The step is relative to the parameter, since a volume has no natural
+        scale of its own.
+        """
+        value = self._parameter(name, where)
+        step = _PARAMETER_STEP * abs(value)
+        if step == 0.0:
+            raise ValueError(f"{where} cannot differentiate at {name} = 0")
+        couplings = self.ensemble.couplings
+        beta = self.beta
+        up = self.system.at(**{name: value + step}).log_z(beta, couplings)
+        down = self.system.at(**{name: value - step}).log_z(beta, couplings)
+        return (up - down) / (2.0 * step)
 
     def _with_field(self, variable: str, value: float) -> "ThermalState":
         """The same system in the same ensemble with one field re-valued."""

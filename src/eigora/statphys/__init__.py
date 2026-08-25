@@ -32,6 +32,7 @@ from eigora.statphys.systems import (
     CompositeSystem,
     Degenerate,
     HarmonicMode,
+    IdealGas,
     Level,
     Moments,
     NLevel,
@@ -49,6 +50,7 @@ from eigora.statphys.ensembles import (
     Ensemble,
     Field,
     Generalised,
+    IsothermalIsobaric,
     Magnetic,
 )
 
@@ -62,6 +64,7 @@ __all__ = [
     "TwoLevel",
     "Degenerate",
     "HarmonicMode",
+    "IdealGas",
     "Spin",
     "Rotor",
     "Box1D",
@@ -71,6 +74,7 @@ __all__ = [
     "Ensemble",
     "Canonical",
     "Magnetic",
+    "IsothermalIsobaric",
     "Generalised",
     "ThermalState",
     "equilibrium",

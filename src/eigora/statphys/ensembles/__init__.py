@@ -15,12 +15,18 @@ rule in `statphys.monte_carlo` later.
 """
 
 from eigora.statphys.ensembles.base import Ensemble, Field
-from eigora.statphys.ensembles.known import Canonical, Generalised, Magnetic
+from eigora.statphys.ensembles.known import (
+    Canonical,
+    Generalised,
+    IsothermalIsobaric,
+    Magnetic,
+)
 
 __all__ = [
     "Field",
     "Ensemble",
     "Canonical",
     "Magnetic",
+    "IsothermalIsobaric",
     "Generalised",
 ]

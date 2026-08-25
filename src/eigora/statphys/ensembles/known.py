@@ -14,6 +14,7 @@ The potential that `-T log Z` gives is different in each of them, and
 
     Canonical           Z = sum exp(-beta E)              Helmholtz F
     GrandCanonical      Xi = sum exp(-beta(E - mu N))     grand potential, = -PV
+    IsothermalIsobaric  Delta = sum exp(-beta(E + P V))   Gibbs G
     Magnetic            Z = sum exp(-beta(E - h M))       magnetic free energy
 
 Adding a field is one Legendre transform. Note that enthalpy is *not* in this
@@ -84,6 +85,44 @@ class Magnetic(Ensemble):
 
 
 @dataclass(frozen=True)
+class IsothermalIsobaric(Ensemble):
+    """
+    Fixed temperature and pressure: the volume fluctuates. The (T, P, N) ensemble.
+
+    The weight is `exp(-beta(E + P V))`, so the volume enters with sign -1 --
+    raising the pressure makes large volumes *less* likely, and `<V>` therefore
+    falls as P rises. That sign is carried through every derivative:
+    `d<V>/dP = -beta Var(V)`, negative, which is the isothermal compressibility
+    being positive.
+
+    `-T log Delta` is the Gibbs energy. Note that enthalpy is *not* what this
+    ensemble generates: `H = U + PV` is the potential at fixed (S, P), and no
+    simple ensemble samples at fixed entropy. `ThermalState.enthalpy` computes
+    it from a state rather than generating one.
+
+    Parameters
+    ----------
+    temperature : float
+        Must be positive.
+    pressure : float
+        The pressure `P`, conjugate to the volume. Must be positive.
+    """
+
+    pressure: float
+
+    FIELD_ATTRIBUTES = {"volume": "pressure"}
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if self.pressure <= 0.0:
+            raise ValueError(f"pressure must be positive, got {self.pressure}")
+
+    @property
+    def fields(self) -> tuple[Field, ...]:
+        return (Field("volume", self.pressure, -1, "P"),)
+
+
+@dataclass(frozen=True)
 class Generalised(Ensemble):
     """
     An ensemble with an arbitrary set of conjugate fields.
@@ -142,4 +181,4 @@ class Generalised(Ensemble):
         )
 
 
-__all__ = ["Canonical", "Magnetic", "Generalised"]
+__all__ = ["Canonical", "Magnetic", "IsothermalIsobaric", "Generalised"]

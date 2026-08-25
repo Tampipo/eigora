@@ -24,14 +24,16 @@ Units: k_B = 1, and atomic units elsewhere (hbar = m = 1).
 
 import math
 from collections.abc import Iterator, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from eigora.statphys.systems.base import (
     _TOL,
     Couplings,
     Level,
     Moments,
+    ParametrisedSystem,
     SpectralSystem,
+    System,
 )
 from eigora.statphys.systems.composite import CompositeSystem
 
@@ -329,7 +331,7 @@ class Rotor(SpectralSystem):
 
 
 @dataclass(frozen=True)
-class Box1D(SpectralSystem):
+class Box1D(SpectralSystem, ParametrisedSystem):
     """
     One particle in a 1D box of length L: E_n = pi^2 n^2 / (2 m L^2), n >= 1.
 
@@ -372,6 +374,141 @@ class Box1D(SpectralSystem):
     def n_states(self) -> None:
         return None
 
+    @property
+    def parameters(self) -> dict[str, float]:
+        """The box length, named "volume" -- in one dimension they are the same."""
+        return {"volume": self.length}
+
+    def at(self, **changes: float) -> "Box1D":
+        """A box of a different length or mass."""
+        if "volume" in changes:
+            changes = dict(changes)
+            changes["length"] = changes.pop("volume")
+        return replace(self, **changes)
+
+
+@dataclass(frozen=True)
+class IdealGas(ParametrisedSystem):
+    """
+    N non-interacting classical particles, in the continuum.
+
+    The first entry in the catalogue with no levels at all: the spectrum is
+    continuous, so there is nothing to enumerate and `log Z` is the primitive
+    rather than a summation. It is also the first that has a closed form in
+    *two* ensembles, which is why the volume can be either fixed or free:
+
+        volume given    Z = V^N / (N! lambda^(d N))          canonical
+        volume omitted  Delta = 1 / (lambda^(d N) (beta P)^(N+1))   isobaric
+
+    with `lambda = sqrt(2 pi beta / m)` the thermal de Broglie wavelength. The
+    isobaric form is the first integrated over the volume, and the `N!` from
+    indistinguishability cancels exactly against the `N!` from `int dV V^N
+    exp(-beta P V)`, which is why it does not appear there.
+
+    **Volume is either a parameter or a coupling, never both.** Giving it a
+    value fixes it, and the ensemble may not then free it; omitting it leaves
+    it free, and only an ensemble that frees it will accept the system. A
+    variable cannot be fixed and fluctuating at once, and making that a matter
+    of construction means the existing `equilibrium` check enforces it without
+    a special case.
+
+    Example
+    -------
+    >>> from eigora.statphys import Canonical, IsothermalIsobaric, equilibrium
+    >>> equilibrium(IdealGas(particles=100, volume=50.0), Canonical(2.0)).pressure
+    4.0                                                     # N T / V
+    >>> equilibrium(IdealGas(particles=100), IsothermalIsobaric(2.0, 4.0)).mean("volume")
+    50.5                                                    # (N + 1) T / P
+
+    Note the `N + 1`: the isobaric ensemble really does give `<V> = (N+1)T/P`,
+    not `N T/P`. It is a genuine finite-size effect of holding the pressure
+    rather than the volume, not an error, and it vanishes as 1/N.
+
+    Parameters
+    ----------
+    particles : int
+        Number of particles. Zero is allowed, and gives `log Z = 0` -- needed
+        because the chemical potential is `F(N) - F(N-1)`.
+    volume : float, optional
+        The volume, if it is held fixed. Omit it to leave the volume free for
+        an isobaric ensemble to set by its pressure.
+    mass : float
+        Particle mass, in atomic units.
+    ndim : int
+        Spatial dimensions.
+    """
+
+    particles: int
+    volume: float | None = None
+    mass: float = 1.0
+    ndim: int = 3
+
+    def __post_init__(self) -> None:
+        if self.particles < 0:
+            raise ValueError(f"particles must be non-negative, got {self.particles}")
+        if self.volume is not None and self.volume <= 0.0:
+            raise ValueError(f"volume must be positive, got {self.volume}")
+        if self.mass <= 0.0:
+            raise ValueError(f"mass must be positive, got {self.mass}")
+        if self.ndim < 1:
+            raise ValueError(f"ndim must be at least 1, got {self.ndim}")
+
+    @property
+    def is_exact(self) -> bool:
+        return True
+
+    @property
+    def extensive_variables(self) -> frozenset[str]:
+        """The volume, but only when it was left free."""
+        return frozenset() if self.volume is not None else frozenset({"volume"})
+
+    @property
+    def parameters(self) -> dict[str, float]:
+        """The particle number always; the volume only when it is held fixed."""
+        fixed = {"particles": float(self.particles)}
+        if self.volume is not None:
+            fixed["volume"] = self.volume
+        return fixed
+
+    def at(self, **changes: float) -> "IdealGas":
+        """A gas with a different particle number, volume, mass or dimension."""
+        if "particles" in changes:
+            changes = dict(changes)
+            changes["particles"] = int(changes["particles"])
+        return replace(self, **changes)
+
+    def log_thermal_wavelength(self, beta: float) -> float:
+        """log sqrt(2 pi beta / m), kept in logs so large N never overflows."""
+        return 0.5 * math.log(2.0 * math.pi * beta / self.mass)
+
+    def log_z(self, beta: float, couplings: Couplings = ()) -> float:
+        if beta <= 0.0 or not math.isfinite(beta):
+            raise ValueError(f"beta must be positive and finite, got {beta}")
+        free = dict(couplings).get("volume")
+        kinetic = -self.particles * self.ndim * self.log_thermal_wavelength(beta)
+
+        if free is None:
+            if self.volume is None:
+                raise ValueError(
+                    "this gas has no volume, so it can only be summed in an "
+                    "ensemble that frees one -- give it a volume, or use an "
+                    "isobaric ensemble"
+                )
+            return (
+                kinetic
+                + self.particles * math.log(self.volume)
+                - math.lgamma(self.particles + 1)
+            )
+
+        # The coupling is `sign * field` and volume enters with sign -1, so a
+        # physical (positive) pressure arrives here negative.
+        if free >= 0.0:
+            raise ValueError(
+                f"an isobaric ideal gas needs a positive pressure; the volume "
+                f"coupling is {free}, which is a pressure of {-free}"
+            )
+        return kinetic - (self.particles + 1) * math.log(-beta * free)
+
 
 def particle_in_box(
     length: float, mass: float = 1.0, ndim: int = 3
@@ -408,5 +545,6 @@ __all__ = [
     "Spin",
     "Rotor",
     "Box1D",
+    "IdealGas",
     "particle_in_box",
 ]
