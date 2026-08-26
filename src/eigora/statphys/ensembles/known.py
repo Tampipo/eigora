@@ -170,7 +170,7 @@ class Generalised(Ensemble):
     def with_field(self, variable: str, value: float) -> "Generalised":
         """A copy with one conjugate field re-valued, the rest untouched."""
         self.field(variable)
-        return Generalised(
+        return type(self)(
             self.temperature,
             tuple(
                 Field(c.variable, value, c.sign, c.symbol)
