@@ -33,7 +33,7 @@ distinction between a coupling and a parameter.
 
 import math
 from collections.abc import Iterator
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 
 from eigora.statphys.systems.base import (
     _MAX_TERMS,
@@ -42,7 +42,6 @@ from eigora.statphys.systems.base import (
     Couplings,
     Level,
     Moments,
-    ParametrisedSystem,
     SpectralSystem,
     System,
 )
@@ -133,7 +132,7 @@ BOLTZMANN = Statistics("boltzmann", 0, 0)
 
 
 @dataclass(frozen=True)
-class IdenticalParticles(ParametrisedSystem):
+class IdenticalParticles(System):
     """
     Indistinguishable particles on a set of orbitals, with the number free.
 
@@ -180,18 +179,14 @@ class IdenticalParticles(ParametrisedSystem):
         `FERMI`, `BOSE` or `BOLTZMANN`.
     """
 
-    orbitals: System
+    orbitals: SpectralSystem
     statistics: Statistics
-    particles: int | None = None
 
     def __post_init__(self) -> None:
-        if self.particles is not None and self.particles < 0:
-            raise ValueError(
-                f"particles must be non-negative, got {self.particles}"
-            )
-        if not isinstance(self.orbitals, System):
+        if not isinstance(self.orbitals, SpectralSystem):
             raise TypeError(
-                f"orbitals must be a System, got {type(self.orbitals).__name__}"
+                f"orbitals must be a SpectralSystem so they can be enumerated, "
+                f"got {type(self.orbitals).__name__}"
             )
         if not isinstance(self.statistics, Statistics):
             raise TypeError(
@@ -204,22 +199,8 @@ class IdenticalParticles(ParametrisedSystem):
 
     @property
     def extensive_variables(self) -> frozenset[str]:
-        """The particle number, when it is the thing that fluctuates."""
-        return frozenset() if self.particles is not None else frozenset({"particles"})
-
-    @property
-    def parameters(self) -> dict[str, float]:
-        """The particle number, when it is instead held fixed."""
-        if self.particles is None:
-            return {}
-        return {"particles": float(self.particles)}
-
-    def at(self, **changes: float) -> "IdenticalParticles":
-        """The same gas at a different particle number."""
-        if "particles" in changes:
-            changes = dict(changes)
-            changes["particles"] = int(changes["particles"])
-        return replace(self, **changes)
+        """The particle number, which is what fluctuates here."""
+        return frozenset({"particles"})
 
     # -- the factorised sums ----------------------------------------------
 
@@ -252,8 +233,6 @@ class IdenticalParticles(ParametrisedSystem):
         would stop while the terms were still growing.
         """
         self._check_couplings(couplings)
-        if self.particles is not None:
-            return self._fixed_moments(beta, couplings)
         chemical_potential = dict(couplings).get("particles")
         if chemical_potential is None:
             raise ValueError(
@@ -263,7 +242,6 @@ class IdenticalParticles(ParametrisedSystem):
         if beta <= 0.0 or not math.isfinite(beta):
             raise ValueError(f"beta must be positive and finite, got {beta}")
         self._check_condensation(beta, chemical_potential)
-        self._require_levels()
 
         statistics = self.statistics
         log_xi = number = number_variance = 0.0
@@ -315,62 +293,7 @@ class IdenticalParticles(ParametrisedSystem):
             variances={"particles": number_variance},
         )
 
-    def _fixed_moments(self, beta: float, couplings: Couplings) -> Moments:
-        """
-        `log Z_N = N log z_1 - log N!` -- the classical fixed-N gas.
-
-        Boltzmann needs no permutation sum: dividing `z_1^N` by `N!` is the
-        whole of "correct Boltzmann counting", and it is exact in the sense
-        that it is the definition of that approximation. Fermi and Bose do
-        need one -- the cycle decomposition of the permutation sum, which
-        gives the Borrmann-Franke recursion -- and that is not built yet.
-
-        The `-log N!` carries no beta, so the energy moments are simply N
-        times the single-particle ones. Nothing is differenced here.
-        """
-        if couplings:
-            raise ValueError(
-                f"this gas holds its particle number at {self.particles}, so "
-                f"an ensemble that frees it has nothing to vary; drop the "
-                f"particle count to make it grand canonical"
-            )
-        if self.statistics.grand_sign != 0:
-            raise ValueError(
-                f"a fixed particle number needs the permutation sum for "
-                f"{self.statistics.name} statistics, which is not implemented "
-                f"yet; BOLTZMANN is exact here, or free the particle number "
-                f"and use GrandCanonical"
-            )
-        count = self.particles
-        single = self.orbitals.moments(beta)
-        return Moments(
-            log_z=count * single.log_z - math.lgamma(count + 1),
-            energy=count * single.energy,
-            energy_variance=count * single.energy_variance,
-        )
-
     # -- helpers ----------------------------------------------------------
-
-    def _require_levels(self) -> None:
-        """
-        Fermi and Bose need the orbitals one at a time; Boltzmann does not.
-
-        The factorisation `log Xi = sum_k g_k (1/s) log(1 + s x_k)` is genuinely
-        per orbital once `s != 0`, so the stream has to exist. At `s = 0` it
-        collapses to `sum_k g_k x_k = e^(beta mu) z_1(beta)`, which needs only
-        the single-particle partition function -- so a closed-form orbital
-        system with no levels at all is perfectly usable classically, and
-        demanding a spectrum there would be a restriction with no cause.
-        """
-        if self.statistics.grand_sign != 0 and not isinstance(
-            self.orbitals, SpectralSystem
-        ):
-            raise TypeError(
-                f"{self.statistics.name} statistics needs the orbitals one at a "
-                f"time, so they must be a SpectralSystem; "
-                f"{type(self.orbitals).__name__} has no level stream. BOLTZMANN "
-                f"needs only the single-particle log Z and would work here"
-            )
 
     def _check_condensation(self, beta: float, chemical_potential: float) -> None:
         """
@@ -382,8 +305,6 @@ class IdenticalParticles(ParametrisedSystem):
         for `x >= 1`, so refuse it by name instead.
         """
         if self.statistics.grand_sign >= 0:
-            return
-        if not isinstance(self.orbitals, SpectralSystem):
             return
         ground = self.orbitals.ground_energy
         if chemical_potential >= ground:
