@@ -17,7 +17,10 @@ from eigora.statphys.systems.base import (
     SpectralSystem,
     System,
 )
-from eigora.statphys.systems.composite import CompositeSystem
+from eigora.statphys.systems.composite import (
+    CompositeSystem,
+    convolve_levels,
+)
 from eigora.statphys.systems.identical import (
     BOLTZMANN,
     BOSE,
@@ -62,4 +65,5 @@ __all__ = [
     "Box1D",
     "particle_in_box",
     "CompositeSystem",
+    "convolve_levels",
 ]

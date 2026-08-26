@@ -33,6 +33,7 @@ from eigora.statphys.systems import (
     FERMI,
     Box1D,
     CompositeSystem,
+    convolve_levels,
     Degenerate,
     HarmonicMode,
     IdealGas,
@@ -51,7 +52,12 @@ from eigora.statphys.systems import (
     particle_in_box,
     with_degeneracy,
 )
-from eigora.statphys.state import ThermalState, equilibrium
+from eigora.statphys.state import (
+    MicrocanonicalState,
+    ThermalState,
+    equilibrium,
+    microcanonical,
+)
 from eigora.statphys.ensembles import (
     Canonical,
     Ensemble,
@@ -85,6 +91,7 @@ __all__ = [
     "Box1D",
     "particle_in_box",
     "CompositeSystem",
+    "convolve_levels",
     "Field",
     "Ensemble",
     "Canonical",
@@ -93,5 +100,7 @@ __all__ = [
     "IsothermalIsobaric",
     "Generalised",
     "ThermalState",
+    "MicrocanonicalState",
     "equilibrium",
+    "microcanonical",
 ]

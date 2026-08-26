@@ -40,7 +40,8 @@ from functools import cached_property
 from scipy.optimize import brentq
 
 from eigora.statphys.ensembles import Ensemble
-from eigora.statphys.systems.base import Moments, System
+from eigora.statphys.systems.base import Level, Moments, System
+from eigora.statphys.systems.composite import convolve_levels
 
 # How far `field_for` will push a bracket outward before giving up.
 _MAX_BRACKET_STEPS = 60
@@ -483,4 +484,193 @@ def equilibrium(system: System, ensemble: Ensemble) -> ThermalState:
     return ThermalState(system, ensemble)
 
 
-__all__ = ["ThermalState", "equilibrium"]
+__all__ = [
+    "ThermalState",
+    "MicrocanonicalState",
+    "equilibrium",
+    "microcanonical",
+]
+
+
+@dataclass(frozen=True)
+class MicrocanonicalState:
+    """
+    A system at fixed energy: the ensemble that counts rather than weights.
+
+    Not an `Ensemble`, and deliberately so. Every ensemble in that family is a
+    log-weight `-beta[E - sum f X]` with a temperature going *in*; this one has
+    no temperature at all. It fixes the energy, gives every microstate at that
+    energy the same weight, and the temperature comes **out**:
+
+        S = log Omega,      1/T = dS/dE
+
+    So there is no `log Z`, no `-T log Z`, and no field to trade against. Its
+    potential *is* the entropy, carrying no `-T` factor -- which is why forcing
+    it into `ThermalState` would mean a temperature that is an input on one
+    branch and an output on the other.
+
+    Counting is exact. `Omega` is a Python integer from the convolution, so
+    `TwoLevel(w) ** 200` at half filling gives `C(200, 100)` itself -- a
+    59-digit number whose logarithm is exact and whose float is not.
+
+    Example
+    -------
+    >>> from eigora.statphys import TwoLevel, microcanonical
+    >>> state = microcanonical(TwoLevel(1.0) ** 200, energy=100.0)
+    >>> state.omega                         # C(200, 100), exactly
+    90548514656103281165404177077484163874504589675413336841320
+    >>> round(state.entropy, 6)
+    135.753236
+    >>> round(state.temperature, 6)         # comes out, was not put in
+    ...
+
+    Parameters
+    ----------
+    system : System
+        Must have a countable spectrum: a finite `SpectralSystem`, or a
+        composite of them, which is convolved.
+    energy : float
+        The shell energy. With `width` unset it must match a level.
+    width : float, optional
+        Shell thickness. Unset means an exact level match, which is the honest
+        discrete microcanonical ensemble; a width sums every level inside
+        `energy +- width/2`, which is what a continuum spectrum needs.
+    tol : float
+        Tolerance for matching a level energy.
+    """
+
+    system: System
+    energy: float
+    width: float | None = None
+    tol: float = 1e-9
+
+    def __post_init__(self) -> None:
+        if self.width is not None and self.width <= 0.0:
+            raise ValueError(f"width must be positive, got {self.width}")
+        if not math.isfinite(self.energy):
+            raise ValueError(f"energy must be finite, got {self.energy}")
+
+    @cached_property
+    def levels(self) -> tuple[Level, ...]:
+        """The system's spectrum, convolved if it is a composite."""
+        return convolve_levels(self.system)
+
+    @property
+    def omega(self) -> int:
+        """
+        The exact number of microstates in the shell.
+
+        An integer, not a float: the whole reason the convolution keeps
+        degeneracies exact is that this number routinely exceeds the double
+        range while its logarithm is perfectly ordinary.
+        """
+        return sum(level.degeneracy for level in self._shell())
+
+    @property
+    def entropy(self) -> float:
+        """
+        `S = log Omega` -- Boltzmann's, and the definition rather than a
+        derivative of something else.
+        """
+        count = self.omega
+        if count == 0:
+            raise ValueError(
+                f"no microstates at energy {self.energy}: the shell is empty, "
+                f"so the entropy is undefined rather than zero. Give a width, "
+                f"or pick an energy the spectrum actually has"
+            )
+        return math.log(count)
+
+    @property
+    def temperature(self) -> float:
+        """
+        `1/T = dS/dE`, by a centred difference over neighbouring shells.
+
+        The direction that makes this ensemble worth having: temperature is
+        derived from the density of states, not supplied. It agrees with the
+        canonical temperature that produces the same mean energy, to O(1/N) --
+        which is the statement that the ensembles are equivalent.
+        """
+        inverse = self.beta
+        if inverse == 0.0:
+            raise ValueError(
+                f"the entropy is stationary at energy {self.energy}, so 1/T = 0 "
+                f"and the temperature is infinite; this is the top of the "
+                f"entropy curve, where a bounded spectrum turns over into "
+                f"negative temperature"
+            )
+        return 1.0 / inverse
+
+    @property
+    def beta(self) -> float:
+        """Inverse temperature, `dS/dE`."""
+        index = self._level_index()
+        levels = self.levels
+        if index == 0 or index == len(levels) - 1:
+            edge = "ground" if index == 0 else "highest"
+            raise ValueError(
+                f"the {edge} level has no neighbour below and above, so dS/dE "
+                f"cannot be centred there; the temperature diverges at the "
+                f"spectrum's edges"
+            )
+        below, above = levels[index - 1], levels[index + 1]
+        return (
+            math.log(above.degeneracy) - math.log(below.degeneracy)
+        ) / (above.energy - below.energy)
+
+    # -- helpers ----------------------------------------------------------
+
+    def _shell(self) -> tuple[Level, ...]:
+        """Every level inside the shell."""
+        if self.width is None:
+            return tuple(
+                level
+                for level in self.levels
+                if abs(level.energy - self.energy) <= self.tol
+            )
+        half = 0.5 * self.width
+        return tuple(
+            level
+            for level in self.levels
+            if abs(level.energy - self.energy) <= half + self.tol
+        )
+
+    def _level_index(self) -> int:
+        """Position of the matching level, for the entropy derivative."""
+        for index, level in enumerate(self.levels):
+            if abs(level.energy - self.energy) <= self.tol:
+                return index
+        raise ValueError(
+            f"no level at energy {self.energy}; dS/dE is a difference over "
+            f"neighbouring levels, so it needs one to sit on"
+        )
+
+
+def microcanonical(
+    system: System,
+    energy: float,
+    width: float | None = None,
+) -> MicrocanonicalState:
+    """
+    Put a system at fixed energy.
+
+    The counterpart of `equilibrium`, and asymmetric with it on purpose: the
+    second argument is a number rather than an `Ensemble`, because fixing the
+    energy is not a choice of weights.
+
+    Parameters
+    ----------
+    system : System
+        Must have a countable spectrum.
+    energy : float
+        The shell energy.
+    width : float, optional
+        Shell thickness; unset means an exact level match.
+
+    Returns
+    -------
+    MicrocanonicalState
+    """
+    if not isinstance(system, System):
+        raise TypeError(f"expected a System, got {type(system).__name__}")
+    return MicrocanonicalState(system, energy, width)
