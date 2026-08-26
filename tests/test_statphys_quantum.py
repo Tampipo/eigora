@@ -21,6 +21,7 @@ import math
 
 import pytest
 
+from eigora.statphys.systems.identical import _signed_logsumexp
 from eigora.statphys import (
     BOLTZMANN,
     BOSE,
@@ -462,3 +463,285 @@ class TestGuards:
     def test_statistics_repr_carries_its_name(self):
         assert "fermi" in repr(FERMI)
         assert Statistics("custom", +1, -1).name == "custom"
+
+
+#: A short ladder for the fixed-N enumerations: four orbitals means at most 35
+#: bosonic configurations at N = 4, so the brute force stays trivial. Fixing N
+#: removes the sum over particle number, which is what made the grand canonical
+#: enumeration expensive.
+SHORT_FIXED = [0.3, 1.1, 2.0, 2.9]
+
+#: Long enough to hold twenty fermions with room above them.
+LADDER_24 = [0.5 * (k + 1) for k in range(24)]
+
+
+def enumerate_fixed(energies, count, beta, statistics):
+    """
+    `log Z_N` by brute force over the configurations holding exactly N particles.
+
+    Fermions choose N distinct orbitals, bosons choose N with repetition -- the
+    two readings of "indistinguishable". Nothing here is shared with the
+    recursion, which is the point.
+    """
+    if statistics is FERMI:
+        groups = itertools.combinations(range(len(energies)), count)
+    else:
+        groups = itertools.combinations_with_replacement(range(len(energies)), count)
+    return math.log(
+        sum(math.exp(-beta * sum(energies[i] for i in group)) for group in groups)
+    )
+
+
+class TestFixedNumber:
+    """
+    The Borrmann-Franke recursion: the permutation sum reorganised by cycles.
+
+    `Z_N = (1/N) sum_k s^(k+1) Z_1(k beta) Z_(N-k)` is `N` terms where the
+    permutation sum is `N!`, so the check that matters is against an
+    enumeration sharing none of its machinery.
+    """
+
+    @pytest.mark.parametrize("statistics", [FERMI, BOSE])
+    @pytest.mark.parametrize("count", [1, 2, 3, 4])
+    def test_recursion_matches_brute_force(self, statistics, count):
+        beta = 0.9
+        gas = IdenticalParticles(NLevel(SHORT_FIXED), statistics, particles=count)
+        assert gas.log_z(beta) == pytest.approx(
+            enumerate_fixed(SHORT_FIXED, count, beta, statistics), rel=1e-12
+        )
+
+    def test_a_filled_shell_is_exactly_the_ground_configuration(self):
+        """
+        N fermions in N orbitals leaves one configuration, so `Z_N` is one term.
+
+        A sharp check on the alternating sum: every cancellation has to land
+        exactly, with no room for a residue.
+        """
+        beta = 0.9
+        gas = IdenticalParticles(
+            NLevel(SHORT_FIXED), FERMI, particles=len(SHORT_FIXED)
+        )
+        assert gas.log_z(beta) == pytest.approx(-beta * sum(SHORT_FIXED), rel=1e-12)
+
+    def test_exclusion_suppresses_and_bunching_enhances(self):
+        """Z_N^Fermi < Z_N^Boltzmann < Z_N^Bose at the same N."""
+        beta, count = 0.9, 3
+        fermi, classical, bose = (
+            IdenticalParticles(NLevel(SHORT_FIXED), s, particles=count).log_z(beta)
+            for s in (FERMI, BOLTZMANN, BOSE)
+        )
+        assert fermi < classical < bose
+
+    def test_boltzmann_bypasses_the_recursion(self):
+        """`log Z_N = N log z_1 - log N!`, since s = 0 degenerates the sum."""
+        beta, count = 0.9, 5
+        orbitals = NLevel(SHORT_FIXED)
+        gas = IdenticalParticles(orbitals, BOLTZMANN, particles=count)
+        assert gas.log_z(beta) == pytest.approx(
+            count * orbitals.log_z(beta) - math.lgamma(count + 1), rel=1e-14
+        )
+
+    def test_more_fermions_than_orbitals_is_exactly_minus_infinity(self):
+        """No configurations exist, so Z_N is zero -- not a small float, not nan."""
+        gas = IdenticalParticles(NLevel([0.0, 1.0]), FERMI, particles=3)
+        assert gas.log_z(1.0) == -math.inf
+
+    def test_no_particles_is_a_partition_function_of_one(self):
+        gas = IdenticalParticles(NLevel(SHORT_FIXED), FERMI, particles=0)
+        assert gas.log_z(1.0) == 0.0
+
+    def test_bosons_survive_a_temperature_that_underflows_plain_floats(self):
+        """
+        The reason the recursion is carried in logs.
+
+        At beta = 100 with twenty bosons, `Z_N ~ exp(-1000)`: zero in double
+        precision, and no rescaling of the *result* recovers it. In logs it is
+        exact -- all twenty sit in the ground orbital, so `log Z_N = -N beta
+        eps_0` to the last digit.
+        """
+        beta, count = 100.0, 20
+        gas = IdenticalParticles(NLevel(LADDER_24), BOSE, particles=count)
+        value = gas.log_z(beta)
+        assert value == pytest.approx(-count * beta * LADDER_24[0], rel=1e-12)
+        assert math.exp(value) if value > -745.0 else True   # underflows to 0.0
+        assert value < -745.0
+
+    def test_fermions_at_low_temperature_refuse_rather_than_lie(self):
+        """
+        Log-space fixes the underflow for both statistics. It does **not** fix
+        the fermionic cancellation, and this test exists so nobody assumes it
+        does.
+
+        At beta = 100 the two terms of `Z_2` are `Z_1(beta)^2` and `Z_1(2 beta)`,
+        both about `exp(-100)`, while the answer is about `exp(-150)`: roughly
+        22 decimal digits of cancellation, against the 16 a double carries. The
+        loss is physical, not a coding defect, so the recursion says so.
+        """
+        gas = IdenticalParticles(NLevel(LADDER_24), FERMI, particles=20)
+        with pytest.raises(ValueError, match="cancell"):
+            gas.log_z(100.0)
+
+    def test_the_cancellation_guard_fires_before_the_answer_is_noise(self):
+        """
+        Around twenty particles the alternating sum has spent its digits.
+
+        Ten of sixteen lost is already more than half, so the guard trips
+        while the result still looks like a perfectly ordinary float.
+        """
+        orbitals = NLevel([0.5 * (k + 1) for k in range(40)])
+        assert math.isfinite(
+            IdenticalParticles(orbitals, FERMI, particles=15).log_z(0.5)
+        )
+        with pytest.raises(ValueError, match="lost .* digits to cancellation"):
+            IdenticalParticles(orbitals, FERMI, particles=25).log_z(0.5)
+
+    def test_bosons_have_no_such_limit(self):
+        """All terms positive, so nothing cancels and no guard is needed."""
+        orbitals = NLevel([0.5 * (k + 1) for k in range(40)])
+        assert math.isfinite(
+            IdenticalParticles(orbitals, BOSE, particles=200).log_z(0.5)
+        )
+
+    def test_an_absurd_particle_count_is_refused_up_front(self):
+        gas = IdenticalParticles(NLevel(LADDER_24), BOSE, particles=5000)
+        with pytest.raises(ValueError, match="past the 1000 cap"):
+            gas.log_z(1.0)
+
+    def test_a_fixed_number_refuses_an_ensemble_that_frees_it(self):
+        gas = IdenticalParticles(NLevel(SHORT_FIXED), FERMI, particles=2)
+        assert gas.extensive_variables == frozenset()
+        with pytest.raises(ValueError, match="frees \\['particles'\\]"):
+            equilibrium(gas, GrandCanonical(1.0, 0.0))
+
+    def test_a_free_number_refuses_a_canonical_ensemble(self):
+        gas = IdenticalParticles(NLevel(SHORT_FIXED), FERMI)
+        with pytest.raises(ValueError, match="needs an ensemble that frees it"):
+            equilibrium(gas, Canonical(1.0)).log_z
+
+    def test_the_particle_count_is_a_parameter_when_fixed(self):
+        gas = IdenticalParticles(NLevel(SHORT_FIXED), FERMI, particles=2)
+        assert gas.parameters == {"particles": 2.0}
+        assert gas.at(particles=3.0).particles == 3
+        assert IdenticalParticles(NLevel(SHORT_FIXED), FERMI).parameters == {}
+
+    def test_energy_moments_come_from_the_recursion(self):
+        """
+        Differenced, since a fixed-N gas has no factorisation to sum over.
+
+        Checked against the enumeration rather than against the recursion, so
+        both the recursion and the differencing are on trial.
+        """
+        beta, count = 0.9, 2
+        gas = IdenticalParticles(NLevel(SHORT_FIXED), FERMI, particles=count)
+        state = equilibrium(gas, Canonical(1.0 / beta))
+
+        step = 1e-5
+        numerical = -(
+            enumerate_fixed(SHORT_FIXED, count, beta + step, FERMI)
+            - enumerate_fixed(SHORT_FIXED, count, beta - step, FERMI)
+        ) / (2.0 * step)
+        assert state.energy == pytest.approx(numerical, rel=1e-6)
+
+    def test_particles_must_be_non_negative(self):
+        with pytest.raises(ValueError, match="particles must be non-negative"):
+            IdenticalParticles(NLevel(SHORT_FIXED), FERMI, particles=-1)
+
+
+class TestBothChemicalPotentialRoutes:
+    """
+    The same mu, from a fixed-N free-energy difference and from inverting <N>.
+
+    Two derivations with nothing in common: one builds two systems and
+    subtracts, the other solves `<N> = n` for the field. Where they agree, and
+    by how much they do not, is the sharpest statement in the package.
+    """
+
+    ORBITALS = NLevel(LADDER_24)
+    TEMPERATURE = 1.0
+    SPACING = 0.5
+
+    def free_energy(self, count):
+        gas = IdenticalParticles(self.ORBITALS, FERMI, particles=count)
+        return equilibrium(gas, Canonical(self.TEMPERATURE)).free_energy
+
+    @pytest.fixture
+    def grand(self):
+        gas = IdenticalParticles(self.ORBITALS, FERMI)
+        return equilibrium(gas, GrandCanonical(self.TEMPERATURE, 0.0))
+
+    def test_the_backward_difference_sits_half_a_level_low(self, grand):
+        """
+        `F(N) - F(N-1)` is the cost of the *Nth* particle, so it is centred at
+        `N - 1/2`, while the grand canonical mu is centred at `N`.
+
+        The offset is therefore half a level spacing and does not shrink with
+        N -- it is discretisation, not a finite-size effect, and reading it as
+        a disagreement would be a mistake in the other direction.
+        """
+        for count in (4, 6, 8):
+            backward = self.free_energy(count) - self.free_energy(count - 1)
+            offset = grand.chemical_potential_for(float(count)) - backward
+            assert offset == pytest.approx(self.SPACING / 2.0, rel=0.05)
+
+    def test_the_centred_difference_converges_on_the_grand_canonical_mu(self, grand):
+        """
+        `[F(N+1) - F(N-1)]/2` is centred at N, and then the two agree.
+
+        The residual gap is the genuine finite-size difference between fixing
+        `<N>` and fixing `N`, so it shrinks -- which is asserted rather than a
+        tolerance, because the rate is the physics.
+        """
+        gaps = []
+        for count in (2, 4, 6, 8):
+            centred = 0.5 * (self.free_energy(count + 1) - self.free_energy(count - 1))
+            gaps.append(abs(centred - grand.chemical_potential_for(float(count))))
+        assert gaps[0] > gaps[1] > gaps[2] > gaps[3]
+        assert gaps[-1] < 1e-2
+
+    def test_energy_per_particle_converges(self, grand):
+        """U/N from the two ensembles, meeting as N grows."""
+        gaps = []
+        for count in (2, 4, 8):
+            chemical_potential = grand.chemical_potential_for(float(count))
+            free = equilibrium(
+                IdenticalParticles(self.ORBITALS, FERMI),
+                GrandCanonical(self.TEMPERATURE, chemical_potential),
+            )
+            fixed = equilibrium(
+                IdenticalParticles(self.ORBITALS, FERMI, particles=count),
+                Canonical(self.TEMPERATURE),
+            )
+            gaps.append(abs(free.energy / count - fixed.energy / count))
+        assert gaps[0] > gaps[1] > gaps[2]
+
+
+class TestSignedLogSumExp:
+    """
+    The numerical kernel the recursion is built on, tested on its own.
+
+    `sum_i s_i exp(l_i)` returned as `(sign, log|sum|)`. Its degenerate cases
+    are exactly the ones that would otherwise surface as `nan` several frames
+    away, so they are worth pinning here rather than only through the physics.
+    """
+
+    def test_a_plain_positive_sum(self):
+        sign, value = _signed_logsumexp([0.0, 0.0], [1, 1])
+        assert sign == 1
+        assert value == pytest.approx(math.log(2.0))
+
+    def test_a_negative_total_is_reported_as_such(self):
+        sign, value = _signed_logsumexp([0.0, math.log(3.0)], [1, -1])
+        assert sign == -1
+        assert value == pytest.approx(math.log(2.0))
+
+    def test_exact_cancellation_gives_minus_infinity_not_nan(self):
+        assert _signed_logsumexp([0.0, 0.0], [1, -1]) == (0, -math.inf)
+
+    def test_all_terms_empty_gives_minus_infinity_not_nan(self):
+        assert _signed_logsumexp([-math.inf, -math.inf], [1, 1]) == (0, -math.inf)
+
+    def test_the_shift_survives_what_plain_exponentials_would_not(self):
+        """Terms at exp(-800) overflow-free, where a direct sum gives 0.0."""
+        sign, value = _signed_logsumexp([-800.0, -800.0], [1, 1])
+        assert sign == 1
+        assert value == pytest.approx(-800.0 + math.log(2.0))

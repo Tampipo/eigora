@@ -26,14 +26,22 @@ recursion uses.** They are opposite, which is why `Statistics` carries two:
 A single `sign` field would be right in one place and silently wrong in the
 other, and both produce plausible floats.
 
-Particle number is free here. Fixing it is a different computation -- the
-Borrmann-Franke recursion -- and a different set of microstates, which is the
-distinction between a coupling and a parameter.
+Both paths live here, and which one applies is a matter of construction:
+
+    IdenticalParticles(orbitals, FERMI)                # N free -> grand canonical
+    IdenticalParticles(orbitals, FERMI, particles=8)   # N fixed -> canonical
+
+They are genuinely different computations over genuinely different sets of
+microstates, which is the distinction between a coupling and a parameter. With
+N free the orbitals factorise. With N fixed they do not, and `Z_N` comes from
+the Borrmann-Franke recursion -- the `N!`-term permutation sum reorganised by
+the cycle structure of each permutation, which is where `recursion_sign` earns
+its place beside `grand_sign`.
 """
 
 import math
 from collections.abc import Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from eigora.statphys.systems.base import (
     _MAX_TERMS,
@@ -42,13 +50,22 @@ from eigora.statphys.systems.base import (
     Couplings,
     Level,
     Moments,
+    ParametrisedSystem,
     SpectralSystem,
-    System,
 )
 
 # Beyond this the exponential is past the double range. Both branches guarded
 # by it have an exact limit, so the guard costs no accuracy.
 _LOG_HUGE = 700.0
+
+# The fixed-N recursion costs O(N^2) arithmetic and N evaluations of the
+# single-particle log Z. This is a guard against an absurd request, not a
+# physical limit.
+_MAX_RECURSION_N = 1000
+
+# Decimal digits the fermionic recursion may lose to cancellation before the
+# answer is noise. Double precision carries about 16.
+_MAX_LOST_DIGITS = 10
 
 
 @dataclass(frozen=True)
@@ -132,9 +149,21 @@ BOLTZMANN = Statistics("boltzmann", 0, 0)
 
 
 @dataclass(frozen=True)
-class IdenticalParticles(System):
+class IdenticalParticles(ParametrisedSystem):
     """
-    Indistinguishable particles on a set of orbitals, with the number free.
+    Indistinguishable particles on a set of single-particle orbitals.
+
+    The particle number is either free or fixed, never both, and saying which
+    is how you choose the ensemble -- the same fixed-or-free construction
+    `IdealGas` uses for its volume::
+
+        IdenticalParticles(orbitals, FERMI)               # N free, grand canonical
+        IdenticalParticles(orbitals, FERMI, particles=8)  # N fixed, canonical
+
+    Free, the grand partition function factorises over orbitals and every
+    moment comes from one pass. Fixed, nothing factorises: `Z_N` is the
+    permutation sum, evaluated by the cycle recursion in `_fixed_log_z`, and
+    the energy moments come from differentiating it.
 
     The `orbitals` argument is a **single-particle** system: its levels are the
     orbitals, and their degeneracies are how many orbitals sit at that energy.
@@ -181,8 +210,13 @@ class IdenticalParticles(System):
 
     orbitals: SpectralSystem
     statistics: Statistics
+    particles: int | None = None
 
     def __post_init__(self) -> None:
+        if self.particles is not None and self.particles < 0:
+            raise ValueError(
+                f"particles must be non-negative, got {self.particles}"
+            )
         if not isinstance(self.orbitals, SpectralSystem):
             raise TypeError(
                 f"orbitals must be a SpectralSystem so they can be enumerated, "
@@ -199,8 +233,30 @@ class IdenticalParticles(System):
 
     @property
     def extensive_variables(self) -> frozenset[str]:
-        """The particle number, which is what fluctuates here."""
+        """The particle number, when it is the thing that fluctuates."""
+        if self.particles is not None:
+            return frozenset()
         return frozenset({"particles"})
+
+    @property
+    def parameters(self) -> dict[str, float]:
+        """The particle number, when it is instead held fixed."""
+        if self.particles is None:
+            return {}
+        return {"particles": float(self.particles)}
+
+    def at(self, **changes: float) -> "IdenticalParticles":
+        """
+        The same gas at a different particle number.
+
+        What makes the canonical chemical potential exact: `mu = F(N) - F(N-1)`
+        is a step of exactly one particle, so it is the definition of the
+        derivative rather than an approximation to it.
+        """
+        if "particles" in changes:
+            changes = dict(changes)
+            changes["particles"] = int(changes["particles"])
+        return replace(self, **changes)
 
     # -- the factorised sums ----------------------------------------------
 
@@ -216,9 +272,30 @@ class IdenticalParticles(System):
         )
 
     def log_z(self, beta: float, couplings: Couplings = ()) -> float:
-        return self.moments(beta, couplings).log_z
+        self._check_couplings(couplings)
+        if self.particles is not None:
+            return self._fixed_log_z(beta)
+        return self._grand_moments(beta, couplings, _TOL).log_z
 
-    def moments(self, beta: float, couplings: Couplings = (), tol: float = _TOL) -> Moments:
+    def moments(
+        self, beta: float, couplings: Couplings = (), tol: float = _TOL
+    ) -> Moments:
+        """
+        Moments, from whichever of the two computations applies.
+
+        With the number free the orbital factorisation gives every moment
+        exactly in one pass. With it fixed there is no such factorisation, so
+        the energy moments come from differentiating the recursion's `log Z` --
+        the generic route in `System`, which is why this defers to `super`.
+        """
+        self._check_couplings(couplings)
+        if self.particles is not None:
+            return super().moments(beta, couplings)
+        return self._grand_moments(beta, couplings, tol)
+
+    def _grand_moments(
+        self, beta: float, couplings: Couplings, tol: float
+    ) -> Moments:
         """
         Every moment in one pass over the orbitals.
 
@@ -232,7 +309,6 @@ class IdenticalParticles(System):
         the orbital energy passes mu, so a criterion written in `beta eps`
         would stop while the terms were still growing.
         """
-        self._check_couplings(couplings)
         chemical_potential = dict(couplings).get("particles")
         if chemical_potential is None:
             raise ValueError(
@@ -292,6 +368,102 @@ class IdenticalParticles(System):
             means={"particles": number},
             variances={"particles": number_variance},
         )
+
+    # -- fixed particle number: the permutation sum -----------------------
+
+    def _fixed_log_z(self, beta: float) -> float:
+        """
+        `log Z_N` by the Borrmann-Franke recursion.
+
+            Z_N = (1/N) sum_{k=1..N} s^(k+1) Z_1(k beta) Z_(N-k),   Z_0 = 1
+
+        This *is* the permutation sum, reorganised. Symmetrising N identical
+        particles means `Z_N = (1/N!) sum_P s^P Tr[P exp(-beta H)]`, and for a
+        non-interacting `H` the trace factorises over the **cycles** of `P`: a
+        cycle of length `k` threads the single-particle propagator round `k`
+        times and so contributes exactly `Z_1(k beta)`. Counting permutations
+        by cycle type collapses `N!` terms into `N`, and only ever asks the
+        orbitals for `log_z` at `k` different temperatures -- so an infinite
+        spectrum with a closed form is no harder than a finite one.
+
+        `s` here is `recursion_sign`, **not** `grand_sign`: a k-cycle carries
+        parity `(-1)^(k-1)`, so fermions alternate and bosons do not, which is
+        the opposite of the two signs in the grand canonical sums.
+        """
+        # No coupling can reach here: with N fixed `extensive_variables` is
+        # empty, so `_check_couplings` has already refused anything non-empty.
+        count = self.particles
+        if count == 0:
+            return 0.0
+        if self.statistics.recursion_sign == 0:
+            # Boltzmann is not in the recursion at all -- s = 0 degenerates it.
+            # Correct classical counting is a single division by N!.
+            return count * self.orbitals.log_z(beta) - math.lgamma(count + 1)
+        if count > _MAX_RECURSION_N:
+            raise ValueError(
+                f"the fixed-N recursion is O(N^2); {count} particles is past "
+                f"the {_MAX_RECURSION_N} cap. Use the grand canonical ensemble, "
+                f"which has no recursion and no sign problem"
+            )
+        if self._beyond_capacity(count):
+            # Exactly zero, not a small number: there are no configurations.
+            return -math.inf
+
+        sign = self.statistics.recursion_sign
+        singles = [self.orbitals.log_z(k * beta) for k in range(1, count + 1)]
+        log_z = [0.0]  # log Z_0 = 0
+
+        for number in range(1, count + 1):
+            magnitudes = [
+                singles[k - 1] + log_z[number - k] for k in range(1, number + 1)
+            ]
+            signs = [1 if k % 2 else sign for k in range(1, number + 1)]
+            total_sign, total = _signed_logsumexp(magnitudes, signs)
+            self._check_cancellation(magnitudes, total_sign, total, number)
+            log_z.append(total - math.log(number))
+
+        return log_z[count]
+
+    def _beyond_capacity(self, count: int) -> bool:
+        """True if Pauli leaves no room for this many fermions."""
+        if self.statistics.grand_sign <= 0:
+            return False
+        capacity = self.orbitals.n_states
+        return capacity is not None and count > capacity
+
+    def _check_cancellation(
+        self,
+        magnitudes: list[float],
+        total_sign: int,
+        total: float,
+        number: int,
+    ) -> None:
+        """
+        Refuse an answer the alternating sum has already destroyed.
+
+        The fermionic terms alternate and cancel, which is the sign problem in
+        miniature: the partial sums are exponentially larger than the result,
+        so significant digits are lost at a rate that grows with N. The loss is
+        measurable -- it is the ratio of the largest term to the signed total --
+        so the recursion can say when it has stopped meaning anything instead
+        of returning noise shaped like a float.
+        """
+        peak = max(magnitudes)
+        if total_sign <= 0 or peak == -math.inf:
+            raise ValueError(
+                f"the fermionic recursion cancelled to a non-positive Z_{number}; "
+                f"it is reliable to a few tens of particles at most -- use "
+                f"BOLTZMANN for the classical limit, or the grand canonical "
+                f"ensemble, which has no sign problem"
+            )
+        lost = (peak - total) / math.log(10.0)
+        if lost > _MAX_LOST_DIGITS:
+            raise ValueError(
+                f"the fermionic recursion lost {lost:.0f} of about 16 digits to "
+                f"cancellation at N={number}; it is reliable to a few tens of "
+                f"particles at most -- use BOLTZMANN for the classical limit, "
+                f"or the grand canonical ensemble, which has no sign problem"
+            )
 
     # -- helpers ----------------------------------------------------------
 
@@ -376,6 +548,24 @@ class WithDegeneracy(SpectralSystem):
 def with_degeneracy(base: SpectralSystem, multiplicity: int) -> WithDegeneracy:
     """`base` with every level `multiplicity` times as degenerate."""
     return WithDegeneracy(base, multiplicity)
+
+
+def _signed_logsumexp(logs: list[float], signs: list[int]) -> tuple[int, float]:
+    """
+    `sum_i s_i exp(l_i)`, returned as `(sign, log|sum|)`.
+
+    Log-space is not tidiness here, it is the only thing that works: at low
+    temperature `Z_N` underflows to zero in plain floats, and rescaling by the
+    ground energy rescues bosons but not fermions, whose N-particle ground
+    state is the Fermi sea rather than N times the lowest orbital.
+    """
+    peak = max(logs)
+    if peak == -math.inf:
+        return 0, -math.inf
+    total = sum(sign * math.exp(value - peak) for value, sign in zip(logs, signs))
+    if total == 0.0:
+        return 0, -math.inf
+    return (1 if total > 0.0 else -1), peak + math.log(abs(total))
 
 
 __all__ = [
