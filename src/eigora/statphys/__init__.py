@@ -52,6 +52,7 @@ from eigora.statphys.systems import (
     particle_in_box,
     with_degeneracy,
 )
+from eigora.statphys import monte_carlo
 from eigora.statphys.state import (
     MicrocanonicalState,
     ThermalState,
@@ -69,6 +70,7 @@ from eigora.statphys.ensembles import (
 )
 
 __all__ = [
+    "monte_carlo",
     "Level",
     "Moments",
     "System",
