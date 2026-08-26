@@ -18,6 +18,7 @@ from eigora.statphys.ensembles.base import Ensemble, Field
 from eigora.statphys.ensembles.known import (
     Canonical,
     Generalised,
+    GrandCanonical,
     IsothermalIsobaric,
     Magnetic,
 )
@@ -27,6 +28,7 @@ __all__ = [
     "Ensemble",
     "Canonical",
     "Magnetic",
+    "GrandCanonical",
     "IsothermalIsobaric",
     "Generalised",
 ]

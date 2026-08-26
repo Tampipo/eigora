@@ -85,6 +85,38 @@ class Magnetic(Ensemble):
 
 
 @dataclass(frozen=True)
+class GrandCanonical(Ensemble):
+    """
+    Fixed temperature and chemical potential: the particle number fluctuates.
+
+    The weight is `exp(-beta(E - mu N))`, and `-T log Xi` is the grand
+    potential, which for a homogeneous system is `-PV`.
+
+    The system it is applied to supplies the *orbitals*, and N is an output
+    rather than an input -- `state.particles` is `<N>`, and
+    `chemical_potential_for(n)` inverts it. Fixing N instead makes it a system
+    parameter and a different computation entirely; the two routes agree only
+    in the thermodynamic limit.
+
+    Parameters
+    ----------
+    temperature : float
+        Must be positive.
+    chemical_potential : float
+        The field `mu`, conjugate to the particle number. For bosons it must
+        lie below the ground orbital energy.
+    """
+
+    chemical_potential: float
+
+    FIELD_ATTRIBUTES = {"particles": "chemical_potential"}
+
+    @property
+    def fields(self) -> tuple[Field, ...]:
+        return (Field("particles", self.chemical_potential, +1, "mu"),)
+
+
+@dataclass(frozen=True)
 class IsothermalIsobaric(Ensemble):
     """
     Fixed temperature and pressure: the volume fluctuates. The (T, P, N) ensemble.
@@ -181,4 +213,10 @@ class Generalised(Ensemble):
         )
 
 
-__all__ = ["Canonical", "Magnetic", "IsothermalIsobaric", "Generalised"]
+__all__ = [
+    "Canonical",
+    "Magnetic",
+    "GrandCanonical",
+    "IsothermalIsobaric",
+    "Generalised",
+]

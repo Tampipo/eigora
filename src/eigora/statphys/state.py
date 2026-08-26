@@ -246,6 +246,34 @@ class ThermalState:
         """chi = d<M>/dh = beta Var(M)."""
         return self.response("magnetisation")
 
+    @property
+    def particles(self) -> float:
+        """<N>. Needs an ensemble that frees the particle number."""
+        return self.mean("particles")
+
+    @property
+    def particle_fluctuation(self) -> float:
+        """
+        d<N>/dmu = beta Var(N).
+
+        Proportional to the isothermal compressibility, and non-negative for
+        the same reason every response is: it is a variance. It diverges where
+        the compressibility does, which is how a phase transition announces
+        itself in this ensemble.
+        """
+        return self.response("particles")
+
+    def chemical_potential_for(self, count: float) -> float:
+        """
+        The chemical potential that produces `<N> = count`.
+
+        The inverse of `particles`, and the counterpart of the fixed-N route:
+        one sets mu and reads N, the other sets N and reads mu. They agree only
+        as N grows, so comparing them measures the finite-size gap rather than
+        checking an implementation.
+        """
+        return self.field_for("particles", count)
+
     # -- conjugates of fixed parameters -----------------------------------
 
     @property

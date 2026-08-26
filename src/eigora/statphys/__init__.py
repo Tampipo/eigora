@@ -28,21 +28,28 @@ is about.
 """
 
 from eigora.statphys.systems import (
+    BOLTZMANN,
+    BOSE,
+    FERMI,
     Box1D,
     CompositeSystem,
     Degenerate,
     HarmonicMode,
     IdealGas,
+    IdenticalParticles,
     Level,
     Moments,
     NLevel,
     ParametrisedSystem,
     Rotor,
     SpectralSystem,
+    Statistics,
+    WithDegeneracy,
     Spin,
     System,
     TwoLevel,
     particle_in_box,
+    with_degeneracy,
 )
 from eigora.statphys.state import ThermalState, equilibrium
 from eigora.statphys.ensembles import (
@@ -50,6 +57,7 @@ from eigora.statphys.ensembles import (
     Ensemble,
     Field,
     Generalised,
+    GrandCanonical,
     IsothermalIsobaric,
     Magnetic,
 )
@@ -65,6 +73,13 @@ __all__ = [
     "Degenerate",
     "HarmonicMode",
     "IdealGas",
+    "IdenticalParticles",
+    "Statistics",
+    "WithDegeneracy",
+    "with_degeneracy",
+    "FERMI",
+    "BOSE",
+    "BOLTZMANN",
     "Spin",
     "Rotor",
     "Box1D",
@@ -74,6 +89,7 @@ __all__ = [
     "Ensemble",
     "Canonical",
     "Magnetic",
+    "GrandCanonical",
     "IsothermalIsobaric",
     "Generalised",
     "ThermalState",

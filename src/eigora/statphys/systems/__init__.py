@@ -18,6 +18,15 @@ from eigora.statphys.systems.base import (
     System,
 )
 from eigora.statphys.systems.composite import CompositeSystem
+from eigora.statphys.systems.identical import (
+    BOLTZMANN,
+    BOSE,
+    FERMI,
+    IdenticalParticles,
+    Statistics,
+    WithDegeneracy,
+    with_degeneracy,
+)
 from eigora.statphys.systems.known import (
     Box1D,
     Degenerate,
@@ -41,6 +50,13 @@ __all__ = [
     "Degenerate",
     "HarmonicMode",
     "IdealGas",
+    "IdenticalParticles",
+    "Statistics",
+    "WithDegeneracy",
+    "with_degeneracy",
+    "FERMI",
+    "BOSE",
+    "BOLTZMANN",
     "Spin",
     "Rotor",
     "Box1D",
