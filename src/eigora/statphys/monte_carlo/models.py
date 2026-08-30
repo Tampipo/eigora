@@ -186,12 +186,26 @@ class FermionGas(Configuration):
     """
     Fermions hopping between orbitals, with Pauli enforced by refusal.
 
-    A microstate is which orbitals are occupied. A move picks an occupied
-    orbital and an empty one; if the draw lands on an occupied target there is
-    **no legal move**, and `propose` returns `None`. That is the honest way to
-    express exclusion: it is not a rejected move with an unusual acceptance
-    rule, it is the absence of a move, and keeping it out of the acceptance
-    rule leaves that rule pure Metropolis.
+    A microstate is which orbitals are occupied. A move draws the source
+    uniformly from the *occupied* orbitals and the target uniformly from the
+    *empty* ones, so every proposal is a legal move. Drawing both uniformly
+    over all orbitals instead would be legal only with probability
+    `(N/K)(1 - N/K)` -- 17% for twelve fermions in fifty-four orbitals, and
+    worse the more dilute the gas.
+
+    **The proposal is still symmetric, and only because the hop conserves N.**
+    Forward, `T(x -> x') = 1/(N (K - N))`. The reverse hop starts from a
+    configuration that still has `N` occupied and `K - N` empty orbitals, so
+    it carries the same probability, the ratio is one, and `log_bias` stays
+    zero. Add a move that creates or destroys a particle and that argument
+    fails immediately -- `N` and `K - N` differ between the two directions --
+    so `log_bias` would become mandatory.
+
+    `propose` still returns `None`, but now only when there is genuinely
+    nowhere to go: an empty gas has nothing to move, a full one has nowhere to
+    put it. That is exclusion expressed as the *absence of a move* rather than
+    as a rejection with an unusual acceptance rule, which leaves the
+    acceptance rule pure Metropolis.
 
     The particle number is reported, so a grand canonical ensemble can free it
     -- though a hop conserves it, so `<N>` is whatever it started at unless a
@@ -220,6 +234,10 @@ class FermionGas(Configuration):
         self.occupied[
             generator.choice(self.energies.size, size=self.particles, replace=False)
         ] = True
+        # Kept alongside the mask so a proposal never has to search for a
+        # legal move: it draws one directly from each list.
+        self._filled = [int(k) for k in np.flatnonzero(self.occupied)]
+        self._empty = [int(k) for k in np.flatnonzero(~self.occupied)]
         self._energy = self.energy_of()
 
     @property
@@ -237,21 +255,25 @@ class FermionGas(Configuration):
         return self.occupied.astype(np.float64)
 
     def propose(self, rng) -> "Proposal | None":
-        size = self.energies.size
-        source = int(rng.integers(size))
-        target = int(rng.integers(size))
-        if not self.occupied[source] or self.occupied[target]:
+        if not self._filled or not self._empty:
             return None       # nothing to move, or nowhere to put it
+        here = int(rng.integers(len(self._filled)))
+        there = int(rng.integers(len(self._empty)))
+        source, target = self._filled[here], self._empty[there]
         return Proposal(
             delta_energy=float(self.energies[target] - self.energies[source]),
             deltas={"particles": 0.0},
-            payload=(source, target),
+            payload=(source, target, here, there),
         )
 
     def apply(self, proposal: Proposal) -> None:
-        source, target = proposal.payload
+        source, target, here, there = proposal.payload
         self.occupied[source] = False
         self.occupied[target] = True
+        # The two orbitals trade places between the lists, in O(1): their
+        # positions came along in the payload.
+        self._filled[here] = target
+        self._empty[there] = source
         self._energy += proposal.delta_energy
 
 

@@ -257,17 +257,61 @@ class TestFermionGas:
         metropolis(gas, Canonical(1.0), 20_000, rng=rng)
         assert gas.occupied.sum() == self.PARTICLES
 
-    def test_blocked_moves_are_counted_not_rejected(self):
+    def test_a_partly_filled_gas_never_wastes_a_proposal(self):
         """
-        A full target is no legal move, which is different from a rejection --
-        and `acceptance` is over moves that were actually offered.
+        The source is drawn from the occupied orbitals and the target from the
+        empty ones, so every proposal is a legal move.
+
+        Drawing both uniformly over all orbitals would be legal only with
+        probability `(N/K)(1 - N/K)` -- 17% at the filling used in
+        `examples/fermi_dirac_mc.py`, and worse the more dilute the gas.
         """
         rng = np.random.default_rng(23)
-        gas = FermionGas(self.ENERGIES, 4, rng=rng)
+        gas = FermionGas(self.ENERGIES, self.PARTICLES, rng=rng)
         run = metropolis(gas, Canonical(1.0), 5_000, rng=rng)
-        assert run.blocked > 0
+        assert run.blocked == 0
         assert run.steps == 5_000
-        assert 0.0 <= run.acceptance <= 1.0
+        assert 0.0 < run.acceptance <= 1.0
+
+    @pytest.mark.parametrize("particles", (0, 5))
+    def test_blocked_only_when_there_is_nowhere_to_go(self, particles):
+        """
+        `None` now means what it says: an empty gas has nothing to move, a
+        full one has nowhere to put it. Exclusion as the absence of a move.
+        """
+        rng = np.random.default_rng(24)
+        gas = FermionGas(self.ENERGIES, particles, rng=rng)
+        run = metropolis(gas, Canonical(1.0), 500, rng=rng)
+        assert run.blocked == run.steps
+        assert run.accepted == 0
+        assert run.acceptance == 0.0
+
+    def test_the_occupied_and_empty_lists_stay_consistent(self):
+        """
+        The lists are maintained incrementally, so they can drift out of step
+        with the mask -- the same class of bug as the running energy.
+        """
+        rng = np.random.default_rng(25)
+        gas = FermionGas(self.ENERGIES, self.PARTICLES, rng=rng)
+        metropolis(gas, Canonical(1.0), 20_000, rng=rng)
+        assert sorted(gas._filled) == list(np.flatnonzero(gas.occupied))
+        assert sorted(gas._empty) == list(np.flatnonzero(~gas.occupied))
+        assert len(gas._filled) == self.PARTICLES
+
+    def test_the_proposal_is_symmetric_because_n_is_conserved(self):
+        """
+        `T(x->x') = 1/(N(K-N))` both ways, so `log_bias` is zero -- and only
+        because a hop leaves `N` and `K-N` unchanged. A move that created or
+        destroyed a particle would break this and need the bias.
+        """
+        rng = np.random.default_rng(26)
+        gas = FermionGas(self.ENERGIES, self.PARTICLES, rng=rng)
+        for _ in range(50):
+            proposal = gas.propose(rng)
+            assert proposal.log_bias == 0.0
+            before = len(gas._filled), len(gas._empty)
+            gas.apply(proposal)
+            assert (len(gas._filled), len(gas._empty)) == before
 
     def test_too_many_fermions_is_refused(self):
         with pytest.raises(ValueError, match="will not fit"):
