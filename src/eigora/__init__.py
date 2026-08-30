@@ -14,6 +14,7 @@ from eigora.fft import fft1d, ifft1d, fft_frequencies
 from eigora.functions import gaussian, sinc, heaviside
 from eigora.spherical_harmonics import spherical_harmonic
 from eigora import qm
+from eigora import statphys
 
 
 
@@ -33,4 +34,5 @@ __all__ = [
     "constants",
     "spherical_harmonic",
     "qm",
+    "statphys",
 ]
