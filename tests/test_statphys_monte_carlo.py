@@ -29,8 +29,10 @@ import pytest
 
 from eigora.statphys import Canonical, Magnetic
 from eigora.statphys.monte_carlo import (
+    BosonGas,
     Configuration,
     FermionGas,
+    Gas,
     HeisenbergLattice,
     IsingLattice,
     Proposal,
@@ -294,9 +296,9 @@ class TestFermionGas:
         rng = np.random.default_rng(25)
         gas = FermionGas(self.ENERGIES, self.PARTICLES, rng=rng)
         metropolis(gas, Canonical(1.0), 20_000, rng=rng)
-        assert sorted(gas._filled) == list(np.flatnonzero(gas.occupied))
         assert sorted(gas._empty) == list(np.flatnonzero(~gas.occupied))
-        assert len(gas._filled) == self.PARTICLES
+        assert sorted(gas._where) == list(np.flatnonzero(gas.occupied))
+        assert gas.occupation.sum() == self.PARTICLES
 
     def test_the_proposal_is_symmetric_because_n_is_conserved(self):
         """
@@ -309,9 +311,9 @@ class TestFermionGas:
         for _ in range(50):
             proposal = gas.propose(rng)
             assert proposal.log_bias == 0.0
-            before = len(gas._filled), len(gas._empty)
+            before = len(gas._where), len(gas._empty)
             gas.apply(proposal)
-            assert (len(gas._filled), len(gas._empty)) == before
+            assert (len(gas._where), len(gas._empty)) == before
 
     def test_too_many_fermions_is_refused(self):
         with pytest.raises(ValueError, match="will not fit"):
@@ -463,3 +465,156 @@ class TestSamplingSurface:
         rng = np.random.default_rng(62)
         assert IsingLattice((4, 5), rng=rng).sites == 20
         assert HeisenbergLattice((3, 4), rng=rng).sites == 12
+
+
+
+class TestBosonGas:
+    """
+    Bunching, and the first place `log_bias` is not zero.
+
+    Picking a particle uniformly favours already-crowded orbitals, so the
+    forward and reverse proposals differ by `(n_t + 1)/n_s`. That factor *is*
+    bunching, and a sampler without it converges confidently on the wrong
+    distribution.
+    """
+
+    ENERGIES = (0.0, 1.0, 2.5)
+    PARTICLES = 3
+    TEMPERATURE = 1.25
+
+    def exact(self):
+        """Boltzmann over the multisets -- what fixed-N bosons actually are."""
+        weights = {}
+        for chosen in itertools.combinations_with_replacement(
+            range(len(self.ENERGIES)), self.PARTICLES
+        ):
+            counts = [0] * len(self.ENERGIES)
+            for orbital in chosen:
+                counts[orbital] += 1
+            weights[tuple(counts)] = math.exp(
+                -sum(self.ENERGIES[k] for k in chosen) / self.TEMPERATURE
+            )
+        total = sum(weights.values())
+        return {state: weight / total for state, weight in weights.items()}
+
+    def histogram(self, gas, rng, samples):
+        seen = {}
+        for _ in range(samples):
+            metropolis(gas, Canonical(self.TEMPERATURE), 1, rng=rng)
+            key = tuple(int(n) for n in gas.occupation)
+            seen[key] = seen.get(key, 0) + 1
+        return {state: count / samples for state, count in seen.items()}
+
+    def test_occupations_match_the_exact_enumeration(self):
+        rng = np.random.default_rng(71)
+        gas = BosonGas(self.ENERGIES, self.PARTICLES, rng=rng)
+        sampled = self.histogram(gas, rng, 300_000)
+        truth = self.exact()
+        assert max(abs(sampled.get(k, 0.0) - v) for k, v in truth.items()) < 0.01
+
+    def test_dropping_the_bias_gives_the_wrong_distribution(self):
+        """
+        The test that makes `log_bias` load-bearing physics rather than a
+        synthetic toy: without it the ground state is off by a fifth.
+        """
+
+        class Unbiased(BosonGas):
+            def propose(self, rng):
+                proposal = super().propose(rng)
+                return None if proposal is None else Proposal(
+                    delta_energy=proposal.delta_energy,
+                    deltas=proposal.deltas,
+                    log_bias=0.0,
+                    payload=proposal.payload,
+                )
+
+        rng = np.random.default_rng(72)
+        gas = Unbiased(self.ENERGIES, self.PARTICLES, rng=rng)
+        sampled = self.histogram(gas, rng, 300_000)
+        truth = self.exact()
+        assert max(abs(sampled.get(k, 0.0) - v) for k, v in truth.items()) > 0.1
+
+    def test_bosons_bunch_and_fermions_do_not(self):
+        """
+        The same orbitals and particle count, both statistics: the bosons pile
+        into the ground orbital, the fermions cannot.
+        """
+        rng = np.random.default_rng(73)
+        energies = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0]
+        bosons = BosonGas(energies, 3, rng=rng)
+        fermions = FermionGas(energies, 3, rng=rng)
+        ground = []
+        for gas in (bosons, fermions):
+            total = 0.0
+            for _ in range(40_000):
+                metropolis(gas, Canonical(1.0), 1, rng=rng)
+                total += gas.occupation[0]
+            ground.append(total / 40_000)
+        assert ground[0] > 1.5          # bosons crowd the ground orbital
+        assert ground[1] <= 1.0         # fermions cannot exceed one
+
+    def test_the_bias_is_zero_only_for_fermions(self):
+        rng = np.random.default_rng(74)
+        energies = [0.0, 1.0, 2.0, 3.0]
+        assert FermionGas(energies, 2, rng=rng).propose(rng).log_bias == 0.0
+        biases = {
+            BosonGas(energies, 3, rng=rng).propose(rng).log_bias
+            for _ in range(40)
+        }
+        assert any(bias != 0.0 for bias in biases)
+
+    def test_energy_bookkeeping_does_not_drift(self):
+        rng = np.random.default_rng(75)
+        gas = BosonGas(self.ENERGIES, 5, rng=rng)
+        metropolis(gas, Canonical(1.0), 20_000, rng=rng)
+        assert gas.energy == pytest.approx(gas.energy_of(), abs=1e-9)
+        assert gas.occupation.sum() == 5
+
+    def test_the_source_is_never_its_own_target(self):
+        """
+        A null move is harmless but its bias would not be: `log((n+1)/n)` is
+        not zero, while the reverse of doing nothing is doing nothing.
+        """
+        rng = np.random.default_rng(76)
+        gas = BosonGas(self.ENERGIES, 4, rng=rng)
+        for _ in range(200):
+            _, source, target, _ = gas.propose(rng).payload
+            assert source != target
+
+
+class TestSpinStatistics:
+    """`of_spin` fixes the degeneracy and the statistics from one number."""
+
+    @pytest.mark.parametrize(
+        "spin, kind, multiplicity",
+        [
+            (0.0, BosonGas, 1),
+            (0.5, FermionGas, 2),
+            (1.0, BosonGas, 3),
+            (1.5, FermionGas, 4),
+            (2.0, BosonGas, 5),
+        ],
+    )
+    def test_half_integer_spin_gives_fermions(self, spin, kind, multiplicity):
+        energies = [0.0, 1.0, 2.0]
+        gas = Gas.of_spin(energies, particles=2, spin=spin)
+        assert isinstance(gas, kind)
+        assert gas.energies.size == len(energies) * multiplicity
+        assert gas.statistics is kind.STATISTICS
+
+    def test_the_degeneracy_repeats_each_energy(self):
+        gas = Gas.of_spin([0.0, 1.0], particles=1, spin=0.5)
+        assert list(gas.energies) == [0.0, 0.0, 1.0, 1.0]
+
+    @pytest.mark.parametrize("spin", (0.3, -1.0, 0.75))
+    def test_spin_must_be_a_multiple_of_a_half(self, spin):
+        with pytest.raises(ValueError, match="multiple of 1/2"):
+            Gas.of_spin([0.0, 1.0], particles=1, spin=spin)
+
+    def test_a_gas_needs_somewhere_to_move(self):
+        with pytest.raises(ValueError, match="at least two orbitals"):
+            BosonGas([1.0], 1)
+
+    def test_particles_must_be_non_negative(self):
+        with pytest.raises(ValueError, match="particles must be non-negative"):
+            BosonGas([0.0, 1.0], -1)

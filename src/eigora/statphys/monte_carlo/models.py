@@ -22,6 +22,7 @@ import math
 import numpy as np
 
 from eigora.statphys.monte_carlo.base import Configuration, Proposal
+from eigora.statphys.systems.identical import BOLTZMANN, BOSE, FERMI, Statistics
 
 
 class IsingLattice(Configuration):
@@ -182,99 +183,213 @@ class HeisenbergLattice(Configuration):
         self._magnetisation += proposal.deltas["magnetisation"]
 
 
-class FermionGas(Configuration):
+class Gas(Configuration):
     """
-    Fermions hopping between orbitals, with Pauli enforced by refusal.
+    Identical particles hopping between orbitals, either statistics.
 
-    A microstate is which orbitals are occupied. A move draws the source
-    uniformly from the *occupied* orbitals and the target uniformly from the
-    *empty* ones, so every proposal is a legal move. Drawing both uniformly
-    over all orbitals instead would be legal only with probability
-    `(N/K)(1 - N/K)` -- 17% for twelve fermions in fifty-four orbitals, and
-    worse the more dilute the gas.
+    A microstate is an occupation number per orbital. A move picks a particle
+    uniformly -- so the source orbital comes up with probability `n_s / N` --
+    and offers it a target. What differs between the statistics is only which
+    targets exist:
 
-    **The proposal is still symmetric, and only because the hop conserves N.**
-    Forward, `T(x -> x') = 1/(N (K - N))`. The reverse hop starts from a
-    configuration that still has `N` occupied and `K - N` empty orbitals, so
-    it carries the same probability, the ratio is one, and `log_bias` stays
-    zero. Add a move that creates or destroys a particle and that argument
-    fails immediately -- `N` and `K - N` differ between the two directions --
-    so `log_bias` would become mandatory.
+        fermions   an empty orbital, since a filled one has no room
+        bosons     any other orbital, since there is no limit
 
-    `propose` still returns `None`, but now only when there is genuinely
-    nowhere to go: an empty gas has nothing to move, a full one has nowhere to
-    put it. That is exclusion expressed as the *absence of a move* rather than
-    as a rejection with an unusual acceptance rule, which leaves the
-    acceptance rule pure Metropolis.
+    **The proposal is asymmetric for bosons, and that is physics.** Picking a
+    particle uniformly favours crowded orbitals, and the reverse move is
+    offered with a different probability than the forward one:
 
-    The particle number is reported, so a grand canonical ensemble can free it
-    -- though a hop conserves it, so `<N>` is whatever it started at unless a
-    move that creates or destroys is added.
+        T(x -> x')  = (n_s / N) (1 / A),    T(x' -> x) = ((n_t + 1) / N) (1 / A)
 
-    Parameters
-    ----------
-    energies : sequence of float
-        The single-particle orbital energies.
-    particles : int
-        How many fermions. Conserved by hopping.
-    rng : numpy Generator, optional
-        Used to choose the initial occupation.
+    so `log_bias = log((n_t + 1) / n_s)`, with the occupations read *before*
+    the move. The number of available targets `A` cancels: a hop conserves the
+    particle number, so `A` is the same on both sides.
+
+    For fermions `n_s = 1` and `n_t = 0`, the bias is exactly zero, and the
+    sampler reduces to plain Metropolis. For bosons it does not, and dropping
+    it is not a small error -- on a three-orbital, three-boson system the
+    stationary distribution shifts by 0.25 in absolute probability. Bunching is
+    precisely what the bias encodes.
     """
+
+    #: Set by the subclass. Decides capacity, and therefore which targets exist.
+    STATISTICS: Statistics = BOLTZMANN
 
     def __init__(self, energies, particles, rng=None):
         self.energies = np.asarray(energies, dtype=np.float64)
-        if particles < 0 or particles > self.energies.size:
+        if self.energies.size < 2:
             raise ValueError(
-                f"{particles} fermions will not fit in {self.energies.size} "
-                f"orbitals"
+                f"a gas needs at least two orbitals to move between, got "
+                f"{self.energies.size}"
             )
+        if particles < 0:
+            raise ValueError(f"particles must be non-negative, got {particles}")
         self.particles = int(particles)
         generator = np.random.default_rng() if rng is None else rng
-        self.occupied = np.zeros(self.energies.size, dtype=bool)
-        self.occupied[
-            generator.choice(self.energies.size, size=self.particles, replace=False)
-        ] = True
-        # Kept alongside the mask so a proposal never has to search for a
-        # legal move: it draws one directly from each list.
-        self._filled = [int(k) for k in np.flatnonzero(self.occupied)]
-        self._empty = [int(k) for k in np.flatnonzero(~self.occupied)]
+
+        placed = self._initial_placement(generator)
+        self.occupation = np.bincount(placed, minlength=self.energies.size)
+        # Particle -> orbital, so a uniform draw over particles gives a source
+        # orbital with probability n_s / N. Which particle is irrelevant --
+        # they are identical -- but the *counts* must come out right.
+        self._where = [int(k) for k in placed]
         self._energy = self.energy_of()
+        self._prepare()
+
+    def _initial_placement(self, rng):
+        raise NotImplementedError
+
+    def _prepare(self):
+        """Any bookkeeping the subclass needs alongside the occupations."""
+
+    def _draw_target(self, rng, source):
+        """`(target, slot)`, or `None` when there is nowhere to go."""
+        raise NotImplementedError
+
+    def _commit(self, source, target, slot):
+        """Update the subclass's bookkeeping after a move."""
+
+    @property
+    def statistics(self) -> Statistics:
+        return self.STATISTICS
 
     @property
     def energy(self) -> float:
         return self._energy
 
     def extensive(self) -> dict[str, float]:
-        return {"particles": float(self.occupied.sum())}
+        return {"particles": float(self.particles)}
 
     def energy_of(self) -> float:
-        return float(self.energies[self.occupied].sum())
+        return float(np.dot(self.energies, self.occupation))
 
     def occupations(self) -> np.ndarray:
-        """Which orbitals are filled, as ones and zeros."""
-        return self.occupied.astype(np.float64)
+        """Occupation of each orbital: 0 or 1 for fermions, any integer above."""
+        return self.occupation.astype(np.float64)
 
     def propose(self, rng) -> "Proposal | None":
-        if not self._filled or not self._empty:
-            return None       # nothing to move, or nowhere to put it
-        here = int(rng.integers(len(self._filled)))
-        there = int(rng.integers(len(self._empty)))
-        source, target = self._filled[here], self._empty[there]
+        if self.particles == 0:
+            return None
+        index = int(rng.integers(self.particles))
+        source = self._where[index]
+        drawn = self._draw_target(rng, source)
+        if drawn is None:
+            return None
+        target, slot = drawn
+        # Occupations *before* the move, which is what the ratio needs.
+        crowd = int(self.occupation[source])
+        room = int(self.occupation[target])
         return Proposal(
             delta_energy=float(self.energies[target] - self.energies[source]),
             deltas={"particles": 0.0},
-            payload=(source, target, here, there),
+            log_bias=math.log((room + 1) / crowd),
+            payload=(index, source, target, slot),
         )
 
     def apply(self, proposal: Proposal) -> None:
-        source, target, here, there = proposal.payload
-        self.occupied[source] = False
-        self.occupied[target] = True
-        # The two orbitals trade places between the lists, in O(1): their
-        # positions came along in the payload.
-        self._filled[here] = target
-        self._empty[there] = source
+        index, source, target, slot = proposal.payload
+        self.occupation[source] -= 1
+        self.occupation[target] += 1
+        self._where[index] = target
         self._energy += proposal.delta_energy
+        self._commit(source, target, slot)
+
+    @staticmethod
+    def of_spin(energies, particles, spin, rng=None) -> "Gas":
+        """
+        Build a gas of spin-`s` particles, letting the physics choose.
+
+        The spin fixes both halves at once: `2s + 1` states per orbital energy,
+        and half-integer spin means fermions while integer spin means bosons.
+        That is the spin-statistics theorem doing the dispatch, rather than the
+        caller being asked twice for the same fact.
+
+        Example
+        -------
+        >>> Gas.of_spin([0.0, 1.0], particles=2, spin=0.5)   # 4 orbitals, fermions
+        >>> Gas.of_spin([0.0, 1.0], particles=2, spin=1)     # 6 orbitals, bosons
+        """
+        multiplicity = round(2.0 * spin + 1.0)
+        if abs(2.0 * spin + 1.0 - multiplicity) > 1e-9 or multiplicity < 1:
+            raise ValueError(f"spin must be a non-negative multiple of 1/2, got {spin}")
+        orbitals = np.repeat(np.asarray(energies, dtype=np.float64), multiplicity)
+        kind = FermionGas if multiplicity % 2 == 0 else BosonGas
+        return kind(orbitals, particles, rng=rng)
+
+
+class FermionGas(Gas):
+    """
+    Fermions: one particle per orbital, so a target must be empty.
+
+    The empty orbitals are kept as a list, so a proposal draws a legal move
+    directly instead of guessing and being refused. Drawing both source and
+    target uniformly over all orbitals would be legal only with probability
+    `(N/K)(1 - N/K)` -- 17% for twelve fermions in fifty-four orbitals, and
+    worse the more dilute the gas.
+
+    `propose` returns `None` only when there is genuinely nowhere to go: an
+    empty gas has nothing to move, a full one has nowhere to put it. That is
+    exclusion expressed as the *absence of a move*, which leaves the
+    acceptance rule pure Metropolis -- and with `n_s = 1`, `n_t = 0`, the bias
+    is exactly zero.
+    """
+
+    STATISTICS = FERMI
+
+    def _initial_placement(self, rng):
+        if self.particles > self.energies.size:
+            raise ValueError(
+                f"{self.particles} fermions will not fit in "
+                f"{self.energies.size} orbitals"
+            )
+        return rng.choice(self.energies.size, size=self.particles, replace=False)
+
+    def _prepare(self):
+        self._empty = [int(k) for k in np.flatnonzero(self.occupation == 0)]
+
+    def _draw_target(self, rng, source):
+        if not self._empty:
+            return None
+        slot = int(rng.integers(len(self._empty)))
+        return self._empty[slot], slot
+
+    def _commit(self, source, target, slot):
+        # The two orbitals trade places: the target is now full, the source
+        # empty. O(1), because the slot came along in the payload.
+        self._empty[slot] = source
+
+    @property
+    def occupied(self) -> np.ndarray:
+        """Which orbitals are filled, as a boolean mask."""
+        return self.occupation > 0
+
+
+class BosonGas(Gas):
+    """
+    Bosons: any number per orbital, so any other orbital is a target.
+
+    The first system in the package for which `log_bias` is not zero. Picking
+    a particle uniformly favours already-crowded orbitals, and the reverse hop
+    is offered with probability `(n_t + 1)/n_s` times the forward one -- which
+    is exactly the bunching that makes bosons bosons. Sampling without it
+    converges, confidently, on the wrong distribution.
+
+    The source orbital is excluded from the target draw. A null move would be
+    harmless but its bias would not be: `log((n_s + 1)/n_s)` is not zero,
+    while the reverse of doing nothing is doing nothing.
+    """
+
+    STATISTICS = BOSE
+
+    def _initial_placement(self, rng):
+        return rng.choice(self.energies.size, size=self.particles, replace=True)
+
+    def _draw_target(self, rng, source):
+        size = self.energies.size
+        target = int(rng.integers(size - 1))
+        if target >= source:
+            target += 1
+        return target, None
 
 
 def _random_directions(rng, shape):
@@ -285,4 +400,10 @@ def _random_directions(rng, shape):
     return np.stack((radial * np.cos(phi), radial * np.sin(phi), z), axis=-1)
 
 
-__all__ = ["FermionGas", "HeisenbergLattice", "IsingLattice"]
+__all__ = [
+    "BosonGas",
+    "FermionGas",
+    "Gas",
+    "HeisenbergLattice",
+    "IsingLattice",
+]

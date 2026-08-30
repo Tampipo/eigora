@@ -20,7 +20,9 @@ from eigora.statphys.monte_carlo.base import Configuration, Proposal
 from eigora.statphys.monte_carlo.measure import autocorrelation_time, blocked_error
 from eigora.statphys.monte_carlo.metropolis import Sampling, metropolis
 from eigora.statphys.monte_carlo.models import (
+    BosonGas,
     FermionGas,
+    Gas,
     HeisenbergLattice,
     IsingLattice,
 )
@@ -30,7 +32,9 @@ __all__ = [
     "Proposal",
     "Sampling",
     "metropolis",
+    "Gas",
     "FermionGas",
+    "BosonGas",
     "HeisenbergLattice",
     "IsingLattice",
     "autocorrelation_time",
