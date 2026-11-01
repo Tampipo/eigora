@@ -1,0 +1,14 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "bootstrap-sha": "34450480d31b47e98f89b9f447783447109af665",
+  "packages": {
+    ".": {
+      "release-type": "python",
+      "package-name": "eigora",
+      "changelog-path": "CHANGELOG.md",
+      "bump-minor-pre-major": true,
+      "bump-patch-for-minor-pre-major": true,
+      "include-component-in-tag": false
+    }
+  }
+}
