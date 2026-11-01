@@ -21,6 +21,12 @@ Small enough to read end to end, which is the point — it exists to be understo
 pip install git+https://github.com/Tampipo/eigora
 ```
 
+To plot results, as the examples do, include matplotlib:
+
+```bash
+pip install "eigora[plot] @ git+https://github.com/Tampipo/eigora"
+```
+
 For development:
 
 ```bash
